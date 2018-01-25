@@ -53,15 +53,42 @@ fn best_earnings_guess(dates : &[EarningsDate]) -> String {
 
 fn get_earnings_date_estimates(symbol : &str) -> Vec<EarningsDate> {
     crossbeam::scope(|scope| {
+        let bloomberg = scope.spawn(|| {
+            // https://www.bloomberg.com/quote/{}:US
+            None
+        });
+
         let nasdaq = scope.spawn(|| {
+            // http://www.nasdaq.com/earnings/report/{}
             None
         });
 
         let finviz = scope.spawn(|| {
+            // https://finviz.com/quote.ashx?t={}
             None
         });
 
-        vec![nasdaq.join(), finviz.join()].into_iter().filter_map(|x| x).collect::<Vec<_>>()
+        let yahoo = scope.spawn(|| {
+            // https://finance.yahoo.com/quote/{}
+            None
+        });
+
+        // Should we include Zacks? Nasdaq pull from the same source so it may skew the results.
+        let zacks = scope.spawn(|| {
+            // https://www.zacks.com/stock/quote/{}
+            None
+        });
+
+        vec![
+            bloomberg.join(),
+            nasdaq.join(),
+            finviz.join(),
+            yahoo.join(),
+            zacks.join(),
+        ]
+        .into_iter()
+        .filter_map(|x| x)
+        .collect::<Vec<_>>()
     })
 }
 
