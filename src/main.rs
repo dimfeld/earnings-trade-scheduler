@@ -7,11 +7,17 @@ extern crate crossbeam;
 extern crate serde;
 #[macro_use] extern crate serde_derive;
 #[macro_use] extern crate failure;
+extern crate chrono;
 
 use std::env;
 use sloggers::Build;
 use sloggers::terminal::TerminalLoggerBuilder;
 use std::collections::HashMap;
+use failure::{Error, ResultExt};
+
+use chrono::{NaiveDate, Datelike, Weekday, Duration};
+
+type Date = NaiveDate;
 
 enum AnnounceTime {
     BeforeMarket,
@@ -20,8 +26,20 @@ enum AnnounceTime {
 }
 
 struct EarningsDate {
-    date : String,
+    date : Date,
     time : AnnounceTime,
+    source : &'static str,
+}
+
+impl EarningsDate {
+    /// Return the date of the last trading before the earnings date, along with an estimated error range.
+    pub fn last_session(&self) -> (Date, usize) {
+        match self.time {
+            AnnounceTime::BeforeMarket => (self.date.pred(), 0),
+            AnnounceTime::AfterMarket => (self.date, 0),
+            AnnounceTime::Unknown => (self.date, 1),
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -46,49 +64,94 @@ fn init_logger() -> slog::Logger {
         .expect("building logger")
 }
 
-fn best_earnings_guess(dates : &[EarningsDate]) -> String {
-    String::new() // TODO implement this
+struct EarningsGuess {
+    last_session : String,
+    concurrences : Vec<EarningsDate>,
+    close_disagreements : Vec<EarningsDate>,
+    far_disagreements : Vec<EarningsDate>,
+}
+
+/// If the date falls on a weekend, step back to the closest weekday.
+trait DatelikeExt {
+    fn closest_weekday(&self) -> Self;
+}
+
+impl DatelikeExt for Date {
+    fn closest_weekday(&self) -> Date {
+        match self.weekday() {
+            Weekday::Sat => *self - Duration::days(1),
+            Weekday::Sun => *self - Duration::days(2),
+            _ => *self
+        }
+    }
+}
+
+fn best_earnings_guess(dates : &[EarningsDate]) -> EarningsGuess {
+
+    // Group the EarningsDates by the last trading session.
+
+
+    EarningsGuess {
+        last_session: String::new(),
+        concurrences: Vec::new(),
+        close_disagreements: Vec::new(),
+        far_disagreements: Vec::new(),
+    }
 }
 
 
-fn get_earnings_date_estimates(symbol : &str) -> Vec<EarningsDate> {
+
+struct EarningsSource {
+    name : &'static str,
+    url: &'static str,
+    extract: (fn(reqwest::Response) -> Option<EarningsDate>),
+}
+
+fn extract_bloomberg(response : reqwest::Response) -> Option<EarningsDate> {
+    None
+}
+
+fn extract_nasdaq(response : reqwest::Response) -> Option<EarningsDate> {
+    None
+}
+
+fn extract_finviz(response : reqwest::Response) -> Option<EarningsDate> {
+    None
+}
+
+fn extract_yahoo(response : reqwest::Response) -> Option<EarningsDate> {
+    None
+}
+
+fn extract_zacks(response : reqwest::Response) -> Option<EarningsDate> {
+    None
+}
+
+fn get_earnings_date_estimates(logger : &slog::Logger, sources : &[&EarningsSource], symbol : &str) -> Vec<EarningsDate> {
     crossbeam::scope(|scope| {
-        let bloomberg = scope.spawn(|| {
-            // https://www.bloomberg.com/quote/{}:US
-            None
-        });
+        let joins = sources.iter()
+            .map(|source| {
+                scope.spawn(move || {
+                    let url = source.url.replace("{}", symbol);
+                    let response = reqwest::get(url.as_str()).with_context(|_| format!("Symbol {}, source {}", symbol, source.name))?;
+                    let date = (source.extract)(response);
+                    let x : Result<_, Error> = Ok(date);
+                    x
+                })
+            })
+            .collect::<Vec<_>>();
 
-        let nasdaq = scope.spawn(|| {
-            // http://www.nasdaq.com/earnings/report/{}
-            None
-        });
-
-        let finviz = scope.spawn(|| {
-            // https://finviz.com/quote.ashx?t={}
-            None
-        });
-
-        let yahoo = scope.spawn(|| {
-            // https://finance.yahoo.com/quote/{}
-            None
-        });
-
-        // Should we include Zacks? Nasdaq pull from the same source so it may skew the results.
-        let zacks = scope.spawn(|| {
-            // https://www.zacks.com/stock/quote/{}
-            None
-        });
-
-        vec![
-            bloomberg.join(),
-            nasdaq.join(),
-            finviz.join(),
-            yahoo.join(),
-            zacks.join(),
-        ]
-        .into_iter()
-        .filter_map(|x| x)
-        .collect::<Vec<_>>()
+        joins.into_iter()
+            .filter_map(|j| {
+                match j.join() {
+                    Err(e) => {
+                        error!(logger, "{}", e);
+                        None
+                    },
+                    Ok(date) => date
+                }
+            })
+            .collect::<Vec<_>>()
     })
 }
 
@@ -96,6 +159,35 @@ fn main() {
     let mut logger = init_logger();
 
     let filename = std::env::args().nth(1).expect("filename");
+
+
+    let sources = vec![
+        EarningsSource{
+            name: "Bloomberg",
+            url: "https://www.bloomberg.com/quote/{}:US",
+            extract: extract_bloomberg,
+        },
+        EarningsSource{
+            name: "NASDAQ",
+            url: "http://www.nasdaq.com/earnings/report/{}",
+            extract: extract_nasdaq,
+        },
+        EarningsSource{
+            name: "FinViz",
+            url: "https://finviz.com/quote.ashx?t={}",
+            extract: extract_finviz,
+        },
+        EarningsSource{
+            name: "Yahoo",
+            url: "https://finance.yahoo.com/quote/{}",
+            extract: extract_yahoo,
+        },
+        EarningsSource{
+            name: "Zacks",
+            url: "https://www.zacks.com/stock/quote/{}",
+            extract: extract_zacks,
+        },
+    ];
 
     let mut reader = csv::ReaderBuilder::new()
         .has_headers(true)
