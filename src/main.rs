@@ -23,6 +23,7 @@ use sloggers::terminal::TerminalLoggerBuilder;
 use std::collections::HashMap;
 use failure::{Error, ResultExt};
 use chrono::{NaiveDate, Datelike, Weekday, Duration};
+use reqwest::header::{Headers, UserAgent};
 
 use earnings::{EarningsDateTime, Date};
 
@@ -100,8 +101,15 @@ fn main() {
     // For each symbol, get the earnings date info
     // Given the best guess at earnings, spit out the possible open/close dates for each scenario, sorted by the average trade return.
 
+    let mut headers = Headers::new();
+    headers.set(UserAgent::new("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/63.0.3239.132 Safari/537.36"));
 
-    for x in earnings::get_earnings_date_estimates(&logger, "ANET") {
+    let client = reqwest::Client::builder()
+        .default_headers(headers)
+        .build()
+        .expect("building client");
+
+    for x in earnings::get_earnings_date_estimates(&logger, &client, "ANET") {
         println!("{} - {}", x.source, x.datetime);
     }
 }

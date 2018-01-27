@@ -14,6 +14,12 @@ use chrono::{NaiveDate, Datelike, Weekday, Duration};
 use regex::Regex;
 use json;
 
+#[derive(Debug, Fail)]
+enum EarningsError {
+    #[fail(display = "Could not find selector")]
+    SelectorNotFound,
+}
+
 struct EarningsSource {
     name : &'static str,
     url: &'static str,
@@ -26,11 +32,13 @@ static SOURCES : &[EarningsSource] = &[
             url: "https://www.bloomberg.com/quote/{}:US",
             extract: extract_bloomberg,
         },
-        EarningsSource{
-            name: "NASDAQ",
-            url: "http://www.nasdaq.com/earnings/report/{}",
-            extract: extract_nasdaq,
-        },
+        // NASDAQ seeems to have aggressive anti-scraping measures in place, or something.
+        // The data is taken from Zack's anyway, so not a big deal.
+        // EarningsSource{
+        //     name: "NASDAQ",
+        //     url: "http://www.nasdaq.com/earnings/report/{}",
+        //     extract: extract_nasdaq,
+        // },
         EarningsSource{
             name: "FinViz",
             url: "https://finviz.com/quote.ashx?t={}",
@@ -41,11 +49,11 @@ static SOURCES : &[EarningsSource] = &[
             url: "https://finance.yahoo.com/quote/{}",
             extract: extract_yahoo,
         },
-        // EarningsSource{
-        //     name: "Zacks",
-        //     url: "https://www.zacks.com/stock/quote/{}",
-        //     extract: extract_zacks,
-        // },
+        EarningsSource{
+            name: "Zacks",
+            url: "https://www.zacks.com/stock/quote/{}",
+            extract: extract_zacks,
+        },
     ];
 
 
@@ -229,18 +237,48 @@ fn extract_yahoo(logger : &slog::Logger, mut response : reqwest::Response) -> Re
 }
 
 fn extract_zacks(logger : &slog::Logger, mut response : reqwest::Response) -> Result<Option<EarningsDateTime>, Error> {
-    // #stock_key_earnings > table > tbody > tr:nth-child(5) > td:nth-child(2)
-    Ok(None)
+    let text = response.text()?;
+    let document = Html::parse_document(text.as_str());
+    let main_selector = Selector::parse(r#"#stock_key_earnings > table > tbody > tr:nth-child(5) > td:nth-child(2)"#).unwrap();
+    let sup_selector = Selector::parse(r#"sup"#).unwrap();
+
+    let earnings_node = document.select(&main_selector).next().ok_or(EarningsError::SelectorNotFound)?;
+
+    let time = earnings_node.select(&sup_selector)
+        .next()
+        .and_then(|node| node.text().next())
+        .map_or(AnnounceTime::Unknown, |text| {
+            match text {
+                "*AMC" => AnnounceTime::AfterMarket,
+                "*BMO" => AnnounceTime::BeforeMarket,
+                _ => AnnounceTime::Unknown,
+            }
+        });
+
+    earnings_node
+        .children()
+        .find(|node| node.value().is_text())
+        .and_then(|date_text_node| date_text_node.value().as_text())
+        .map(|date_text| {
+            let date = Date::parse_from_str(date_text, "%m/%d/%y").with_context(|_| format!("parsing date {:?}", date_text))?;
+
+            Ok(EarningsDateTime{
+                date: date,
+                time: time,
+            })
+        })
+        .map_or(Ok(None), |v| v.map(Some)) // Switch Option<Result<T, E>> to Result<Option<T>, Error>
 }
 
-pub fn get_earnings_date_estimates(logger : &slog::Logger, symbol : &str) -> Vec<SourcedEarningsTime> {
+pub fn get_earnings_date_estimates(logger : &slog::Logger, client : &reqwest::Client, symbol : &str) -> Vec<SourcedEarningsTime> {
     crossbeam::scope(|scope| {
         let joins = SOURCES.iter()
             .map(|source| {
                 scope.spawn(move || {
                     let url = source.url.replace("{}", symbol);
-                    let response = reqwest::get(url.as_str()).with_context(|_| format!("URL {}", url))?;
-                    if !response.status().is_success() {
+                    let response = client.get(url.as_str()).send().with_context(|_| format!("URL {}", url))?;
+                    let is_success = response.status().is_success();
+                    if !is_success {
                         return Err(response.error_for_status().unwrap_err().into());
                     }
 
