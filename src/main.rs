@@ -48,21 +48,6 @@ impl BacktestResult {
     }
 }
 
-/// If the date falls on a weekend, step back to the closest weekday.
-trait DatelikeExt {
-    fn closest_weekday(&self) -> Self;
-}
-
-impl DatelikeExt for Date {
-    fn closest_weekday(&self) -> Date {
-        match self.weekday() {
-            Weekday::Sat => *self - Duration::days(1),
-            Weekday::Sun => *self - Duration::days(2),
-            _ => *self
-        }
-    }
-}
-
 fn init_logger() -> slog::Logger {
     TerminalLoggerBuilder::new()
         .level(sloggers::types::Severity::Debug)
@@ -77,7 +62,8 @@ fn init_logger() -> slog::Logger {
 fn main() {
     let mut logger = init_logger();
 
-    let filename = std::env::args().nth(1).expect("filename");
+    // let filename = std::env::args().nth(1).expect("filename");
+    let symbol = std::env::args().nth(1).expect("symbol");
 
 
     // let mut reader = csv::ReaderBuilder::new()
@@ -109,7 +95,12 @@ fn main() {
         .build()
         .expect("building client");
 
-    for x in earnings::get_earnings_date_estimates(&logger, &client, "ANET") {
+    let earnings_dates = earnings::get_earnings_date_estimates(&logger, &client, symbol.as_str());
+
+    for x in &earnings_dates {
         println!("{} - {}", x.source, x.datetime);
     }
+
+    let guess = earnings::best_earnings_guess(&earnings_dates);
+    println!("Best guess: {:?}", guess);
 }

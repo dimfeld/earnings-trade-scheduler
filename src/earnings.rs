@@ -59,7 +59,7 @@ static SOURCES : &[EarningsSource] = &[
 
 pub type Date = NaiveDate;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum AnnounceTime {
     BeforeMarket,
     AfterMarket,
@@ -76,19 +76,45 @@ impl Display for AnnounceTime {
     }
 }
 
-#[derive(Debug)]
+/// If the date falls on a weekend, step back to the closest weekday.
+trait DatelikeExt {
+    fn next_weekday(&self) -> Self;
+    fn prev_weekday(&self) -> Self;
+}
+
+impl DatelikeExt for Date {
+    fn prev_weekday(&self) -> Date {
+        let x = self.pred();
+        match x.weekday() {
+            Weekday::Sat => x - Duration::days(1),
+            Weekday::Sun => x - Duration::days(2),
+            _ => x,
+        }
+    }
+
+    fn next_weekday(&self) -> Date {
+        let x = self.succ();
+        match x.weekday() {
+            Weekday::Sat => x + Duration::days(2),
+            Weekday::Sun => x + Duration::days(1),
+            _ => x,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct EarningsDateTime{
     pub date: Date,
     pub time: AnnounceTime,
 }
 
 impl EarningsDateTime {
-    /// Return the date of the last trading before the earnings date, along with an estimated error range.
-    pub fn last_session(&self) -> (Date, usize) {
+    /// Return the date of the last trading session before the earnings announcement, along with a "fuzzy" indication
+    pub fn last_session(&self) -> (Date, bool) {
         match self.time {
-            AnnounceTime::BeforeMarket => (self.date.pred(), 0),
-            AnnounceTime::AfterMarket => (self.date, 0),
-            AnnounceTime::Unknown => (self.date, 1),
+            AnnounceTime::BeforeMarket => (self.date.prev_weekday(), false),
+            AnnounceTime::AfterMarket => (self.date, false),
+            AnnounceTime::Unknown => (self.date, true),
         }
     }
 }
@@ -99,30 +125,100 @@ impl Display for EarningsDateTime {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SourcedEarningsTime {
     pub datetime : EarningsDateTime,
     pub source : &'static str,
 }
 
-
+#[derive(Debug)]
 pub struct EarningsGuess {
-    last_session : String,
+    last_session : Date,
     concurrences : Vec<SourcedEarningsTime>,
     close_disagreements : Vec<SourcedEarningsTime>,
     far_disagreements : Vec<SourcedEarningsTime>,
 }
 
-pub fn best_earnings_guess(dates : &[EarningsDateTime]) -> EarningsGuess {
+pub fn best_earnings_guess(dates : &[SourcedEarningsTime]) -> EarningsGuess {
+
+    let mut guesses : HashMap<Date, Vec<(&SourcedEarningsTime, bool)>> = HashMap::new();
 
     // Group the EarningsDates by the last trading session.
+    for date in dates {
+        let (last, fuzz) = date.datetime.last_session();
+        guesses.entry(last)
+            .or_insert_with(Vec::new)
+            .push((date, fuzz));
 
+        if fuzz {
+            // Add entries for the next and previous weekdays
+            guesses.entry(last.next_weekday())
+                .or_insert_with(Vec::new)
+                .push((date, true));
+
+            guesses.entry(last.prev_weekday())
+                .or_insert_with(Vec::new)
+                .push((date, true));
+        }
+    }
+
+    // Now that they're grouped by date, figure out which one is the best guess.
+    let mut highest_fuzzy_count = 0;
+    let mut highest_fuzzy_date = Date::from_num_days_from_ce(1);
+    let mut highest_exact_count = 0;
+    let mut highest_exact_date = Date::from_num_days_from_ce(1);
+
+    // Get the highest count for both exact dates and fuzzy dates, giving preference to the earliest date.
+    for (date, guess) in guesses.iter() {
+        let fuzzy_count = guess.len();
+        let exact_count = guess.iter().filter(|&&(_, from_fuzzy)| from_fuzzy).count();
+        let date = *date;
+
+        if fuzzy_count > highest_fuzzy_count || (fuzzy_count == highest_fuzzy_count && date < highest_fuzzy_date) {
+            highest_fuzzy_count = fuzzy_count;
+            highest_fuzzy_date = date;
+        }
+
+        if exact_count > highest_exact_count || (exact_count == highest_exact_count && date < highest_exact_date) {
+            highest_exact_count = fuzzy_count;
+            highest_exact_date = date;
+        }
+    }
+
+
+    let best_date = highest_fuzzy_date;
+    let concurrences = guesses.remove(&best_date).unwrap().iter().map(|&(guess, _)| guess.clone()).collect::<Vec<_>>();
+
+    let prev_date = guesses.remove(&best_date.prev_weekday()).unwrap_or_else(Vec::new);
+    let next_date = guesses.remove(&best_date.next_weekday()).unwrap_or_else(Vec::new);
+
+    let close_disagreements : Vec<SourcedEarningsTime> = prev_date.into_iter().chain(next_date.into_iter())
+        .fold(Vec::new(), |mut acc, (guess, _)| {
+            // Really simple dedupe check. Since there are only a few sources this is fine and we don't need an O(1) lookup.
+            if concurrences.iter().find(|g| g.source == guess.source).is_none() && acc.iter().find(|g| g.source == guess.source).is_none() {
+                acc.push(guess.clone());
+            }
+            acc
+        });
+
+    // Everything else we haven't seen yet is a far disagreement.
+    let far_disagreements : Vec<SourcedEarningsTime> = guesses.into_iter()
+        .flat_map(|(_, guesses)| guesses.into_iter())
+        .fold(Vec::new(), |mut acc, (guess, _)| {
+            if concurrences.iter().find(|g| g.source == guess.source).is_none() &&
+                close_disagreements.iter().find(|g| g.source == guess.source).is_none() &&
+                acc.iter().find(|g| g.source == guess.source).is_none() {
+
+                acc.push(guess.clone());
+            }
+            acc
+        });
 
     EarningsGuess {
-        last_session: String::new(),
-        concurrences: Vec::new(),
-        close_disagreements: Vec::new(),
-        far_disagreements: Vec::new(),
+        last_session: best_date,
+        concurrences: concurrences,
+        close_disagreements: close_disagreements,
+        far_disagreements: far_disagreements,
     }
 }
 
