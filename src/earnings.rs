@@ -1,5 +1,6 @@
 use std::fmt;
 use std::fmt::{Display, Formatter};
+use std::borrow::Cow;
 use crossbeam;
 use itertools::Itertools;
 use slog;
@@ -57,7 +58,7 @@ static SOURCES : &[EarningsSource] = &[
 
 pub type Date = NaiveDate;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize)]
 pub enum AnnounceTime {
     BeforeMarket,
     AfterMarket,
@@ -109,7 +110,7 @@ impl DatelikeExt for Date {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize)]
 pub struct EarningsDateTime{
     pub date: Date,
     pub time: AnnounceTime,
@@ -132,18 +133,18 @@ impl Display for EarningsDateTime {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct SourcedEarningsTime {
     pub datetime : EarningsDateTime,
-    pub source : &'static str,
+    pub source : Cow<'static, str>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct EarningsGuess {
-    last_session : Date,
-    concurrences : Vec<SourcedEarningsTime>,
-    close_disagreements : Vec<SourcedEarningsTime>,
-    far_disagreements : Vec<SourcedEarningsTime>,
+    pub last_session : Date,
+    pub concurrences : Vec<SourcedEarningsTime>,
+    pub close_disagreements : Vec<SourcedEarningsTime>,
+    pub far_disagreements : Vec<SourcedEarningsTime>,
 }
 
 pub fn best_earnings_guess(dates : &[SourcedEarningsTime]) -> EarningsGuess {
@@ -331,7 +332,7 @@ fn extract_yahoo(_logger : &slog::Logger, mut response : reqwest::Response) -> R
     text.as_str()
         .lines()
         .find(|line| line.starts_with(prefix))
-        .ok_or_else(|| format_err!("Could not location JSON bootstrap payload"))
+        .ok_or_else(|| format_err!("Could not locate JSON bootstrap payload"))
         .and_then(|line| {
             let value = json::parse(&line[prefix.len()..line.len()-1])?;
             let date = value["context"]["dispatcher"]["stores"]["QuoteSummaryStore"]["calendarEvents"]["earnings"]["earningsDate"][0]["raw"].as_i64()
@@ -396,7 +397,7 @@ pub fn get_earnings_date_estimates(logger : &slog::Logger, client : &reqwest::Cl
                     let d = (source.extract)(logger, response).with_context(|_| format!("URL {}", url))?
                         .map(|datetime| SourcedEarningsTime{
                             datetime: datetime,
-                            source: source.name,
+                            source: source.name.into(),
                         });
 
                     if d.is_none() {

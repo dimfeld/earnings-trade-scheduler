@@ -2,7 +2,7 @@ use failure::{Error, ResultExt};
 use earnings::{Date, EarningsDateTime, AnnounceTime, DatelikeExt};
 use chrono::{Duration};
 
-#[derive(Debug,Deserialize,Clone,Copy)]
+#[derive(Debug,Deserialize,Serialize,Clone,Copy)]
 pub enum Strategy {
     #[serde(rename="call_3d_preearnings")]
     Call3DaysBeforeEarnings,
@@ -45,7 +45,7 @@ pub struct BacktestResultInput {
     pub strategy : Strategy,
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug,Clone,Serialize)]
 pub struct BacktestResult {
     pub symbol : String,
     pub wins : usize,
@@ -98,6 +98,10 @@ impl BacktestResult {
     }
 }
 
-pub fn get_best_test(tests : &[BacktestResult]) -> BacktestResult {
-    tests.iter().max_by_key(|x| x.sort_key()).unwrap().clone()
+pub fn get_best_test(tests : &[BacktestResult]) -> usize {
+    tests.iter()
+        .enumerate()
+        .max_by_key(|&(_, x)| x.sort_key())
+        .map(|x| x.0)
+        .unwrap_or(0)
 }

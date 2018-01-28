@@ -20,7 +20,7 @@ mod earnings;
 
 use sloggers::Build;
 use sloggers::terminal::TerminalLoggerBuilder;
-use std::collections::HashMap;
+use std::collections::{HashMap, BTreeMap};
 use reqwest::header::{Headers, UserAgent};
 
 fn init_logger() -> slog::Logger {
@@ -32,11 +32,11 @@ fn init_logger() -> slog::Logger {
         .expect("building logger")
 }
 
-#[derive(Debug)]
+#[derive(Debug,Serialize)]
 struct TestsAndEarnings {
     symbol : String,
-    best_test: cmlviz::BacktestResult,
     tests : Vec<cmlviz::BacktestResult>,
+    best_test_index: usize,
     earnings : earnings::EarningsGuess,
 }
 
@@ -83,7 +83,7 @@ fn main() {
             // Figure out our best guess at the earnings date based on the CML data and a bunch of other sources.
             let mut earnings_dates = earnings::get_earnings_date_estimates(&logger, &client, symbol.as_str());
             let test_date = earnings::SourcedEarningsTime{
-                source: "CML",
+                source: "CML".into(),
                 datetime: tests[0].next_earnings,
             };
             earnings_dates.push(test_date);
@@ -95,17 +95,21 @@ fn main() {
             // beyond the effect that it already has on the average return.
             let best_test = cmlviz::get_best_test(&tests);
 
-            TestsAndEarnings{
+            let open_date = tests[best_test].strategy.open_date(guess.last_session);
+            let close_date = tests[best_test].strategy.close_date(guess.last_session);
+            let key = (open_date, close_date, symbol.clone());
+            let result = TestsAndEarnings{
                 symbol: symbol,
-                best_test: best_test,
                 tests: tests,
+                best_test_index: best_test,
                 earnings: guess,
-            }
+            };
+            (key, result)
         })
-        .collect::<Vec<_>>();
+        .collect::<BTreeMap<_, _>>();
 
     // TODO Nice output formatting
-    for x in tests_with_earnings {
-        println!("{:?}", x);
+    for ((open_date, close_date, symbol), _) in tests_with_earnings {
+        println!("{} - {} : {}", open_date, close_date, symbol);
     }
 }
