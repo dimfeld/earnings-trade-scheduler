@@ -1,4 +1,4 @@
-use failure::Error;
+use failure::{Error, ResultExt};
 use earnings::{Date, EarningsDateTime, AnnounceTime, DatelikeExt};
 use chrono::{Duration};
 
@@ -7,7 +7,7 @@ pub enum Strategy {
     #[serde(rename="call_3d_preearnings")]
     Call3DaysBeforeEarnings,
 
-    #[serde(rename="call_3d_preearnings")]
+    #[serde(rename="call_7d_preearnings")]
     Call7DaysBeforeEarnings,
 
     #[serde(rename="call_14d_preearnings")]
@@ -40,7 +40,7 @@ pub struct BacktestResultInput {
     pub win_rate : String,
     pub avg_trade_return : String,
     pub total_return : String,
-    pub backtest_len : usize,
+    pub backtest_length : usize,
     pub next_earnings : String,
     pub strategy : Strategy,
 }
@@ -53,7 +53,7 @@ pub struct BacktestResult {
     pub win_rate : i32,
     pub avg_trade_return : i32,
     pub total_return : i32,
-    pub backtest_len : usize,
+    pub backtest_length : usize,
     pub next_earnings : EarningsDateTime,
     pub strategy : Strategy,
 }
@@ -63,17 +63,35 @@ impl BacktestResult {
     fn sort_key(&self) -> i32 { self.avg_trade_return }
 
     pub fn from_input(input : BacktestResultInput) -> Result<BacktestResult, Error> {
-        let earnings_date = Date::parse_from_str(input.next_earnings.as_str(), "%m/%d%y")
-            .map(|d| EarningsDateTime{date: d, time: AnnounceTime::Unknown})?;
+        let earnings_date = Date::parse_from_str(input.next_earnings.as_str(), "%m/%d/%y")
+            .map(|d| EarningsDateTime{date: d, time: AnnounceTime::Unknown})
+            .with_context(|e| format!("next_earnings {} : {}", input.next_earnings, e))?;
+
+        let win_rate = input.win_rate.chars()
+            .take_while(|x| x.is_digit(10))
+            .collect::<String>()
+            .parse::<i32>()
+            .with_context(|e| format!("win_rate {} : {}", input.win_rate, e))?;
+
+        let avg_trade_return = input.avg_trade_return.chars()
+            .take_while(|x| x.is_digit(10))
+            .collect::<String>()
+            .parse::<i32>()
+            .with_context(|e| format!("avg_trade_return {} : {}", input.avg_trade_return, e))?;
+
+        let total_return = input.total_return.chars()
+            .take_while(|x| x.is_digit(10))
+            .collect::<String>().parse::<i32>()
+            .with_context(|e| format!("total_return {} : {}", input.total_return, e))?;
 
         Ok(BacktestResult{
             symbol: input.symbol,
             wins: input.wins,
             losses: input.losses,
-            win_rate: input.win_rate.parse::<i32>()?,
-            avg_trade_return: input.avg_trade_return.parse::<i32>()?,
-            total_return: input.total_return.parse::<i32>()?,
-            backtest_len: input.backtest_len,
+            win_rate: win_rate,
+            avg_trade_return: avg_trade_return,
+            total_return: total_return,
+            backtest_length: input.backtest_length,
             next_earnings: earnings_date,
             strategy: input.strategy,
         })
