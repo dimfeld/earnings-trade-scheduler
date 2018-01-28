@@ -169,10 +169,16 @@ pub fn best_earnings_guess(dates : &[SourcedEarningsTime]) -> EarningsGuess {
     let mut highest_exact_date = Date::from_num_days_from_ce(1);
 
     // Get the highest count for both exact dates and fuzzy dates, giving preference to the earliest date.
+    let today = chrono::Local::today().naive_local();
     for (date, guess) in guesses.iter() {
+        let date = *date;
+        if date < today {
+            // Past earnings dates should never be a candidate.
+            continue
+        }
+
         let fuzzy_count = guess.len();
         let exact_count = guess.iter().filter(|&&(_, from_fuzzy)| from_fuzzy).count();
-        let date = *date;
 
         if fuzzy_count > highest_fuzzy_count || (fuzzy_count == highest_fuzzy_count && date < highest_fuzzy_date) {
             highest_fuzzy_count = fuzzy_count;
@@ -288,8 +294,10 @@ fn extract_finviz(logger : &slog::Logger, mut response : reqwest::Response) -> R
                     let mut parsed = chrono::format::Parsed::new();
                     chrono::format::parse(&mut parsed, &cap[1], chrono::format::strftime::StrftimeItems::new("%b %d"))?;
 
-                    let mut date = Date::from_ymd(2018, parsed.month.unwrap(), parsed.day.unwrap());
-                    if date < chrono::Local::today().naive_local() {
+                    let today = chrono::Local::today().naive_local();
+                    let mut date = Date::from_ymd(today.year(), parsed.month.unwrap(), parsed.day.unwrap());
+                    // If it's in the past (minus a bit of buffer for recent earnings), then it's probably next year.
+                    if date < (today - Duration::days(30)) {
                         date = date.with_year(date.year() + 1).unwrap();
                     }
 
