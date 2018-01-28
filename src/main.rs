@@ -18,17 +18,10 @@ extern crate sloggers;
 mod cmlviz;
 mod earnings;
 
-use std::env;
 use sloggers::Build;
 use sloggers::terminal::TerminalLoggerBuilder;
 use std::collections::HashMap;
-use failure::{Error, ResultExt};
-use chrono::{NaiveDate, Datelike, Weekday, Duration};
 use reqwest::header::{Headers, UserAgent};
-
-use earnings::{EarningsDateTime, Date};
-
-
 
 fn init_logger() -> slog::Logger {
     TerminalLoggerBuilder::new()

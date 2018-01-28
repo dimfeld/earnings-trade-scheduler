@@ -1,5 +1,3 @@
-
-use std::env;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use crossbeam;
@@ -237,7 +235,7 @@ pub fn best_earnings_guess(dates : &[SourcedEarningsTime]) -> EarningsGuess {
     }
 }
 
-fn extract_bloomberg(logger : &slog::Logger, mut response : reqwest::Response) -> Result<Option<EarningsDateTime>, Error> {
+fn extract_bloomberg(_logger : &slog::Logger, mut response : reqwest::Response) -> Result<Option<EarningsDateTime>, Error> {
     let document = Html::parse_document(response.text()?.as_str());
     let selector = Selector::parse(r#"span[class^="nextAnnouncementDate"]"#).unwrap();
     document.select(&selector)
@@ -249,8 +247,8 @@ fn extract_bloomberg(logger : &slog::Logger, mut response : reqwest::Response) -
 }
 
 
-
-fn extract_nasdaq(logger : &slog::Logger, mut response : reqwest::Response) -> Result<Option<EarningsDateTime>, Error> {
+#[allow(dead_code)]
+fn extract_nasdaq(_logger : &slog::Logger, mut response : reqwest::Response) -> Result<Option<EarningsDateTime>, Error> {
 
     lazy_static! {
         static ref RE: Regex = Regex::new(r#"earnings on\s*(\d{1,2}/\d{1,2}/\d{4})\s*(after market close|before market open)?."#).unwrap();
@@ -283,7 +281,7 @@ fn extract_nasdaq(logger : &slog::Logger, mut response : reqwest::Response) -> R
 
 }
 
-fn extract_finviz(logger : &slog::Logger, mut response : reqwest::Response) -> Result<Option<EarningsDateTime>, Error> {
+fn extract_finviz(_logger : &slog::Logger, mut response : reqwest::Response) -> Result<Option<EarningsDateTime>, Error> {
     lazy_static! {
         static ref RE: Regex = Regex::new(r#"(\S+ \d{1,2})\s*(AMC|BMO)?"#).unwrap();
     }
@@ -326,7 +324,7 @@ fn extract_finviz(logger : &slog::Logger, mut response : reqwest::Response) -> R
         .map_or(Ok(None), |v| v.map(Some)) // Switch Option<Result<T, E>> to Result<Option<T>, Error>
 }
 
-fn extract_yahoo(logger : &slog::Logger, mut response : reqwest::Response) -> Result<Option<EarningsDateTime>, Error> {
+fn extract_yahoo(_logger : &slog::Logger, mut response : reqwest::Response) -> Result<Option<EarningsDateTime>, Error> {
     let text = response.text()?;
     let prefix = "root.App.main = ";
 
@@ -349,7 +347,7 @@ fn extract_yahoo(logger : &slog::Logger, mut response : reqwest::Response) -> Re
         })
 }
 
-fn extract_zacks(logger : &slog::Logger, mut response : reqwest::Response) -> Result<Option<EarningsDateTime>, Error> {
+fn extract_zacks(_logger : &slog::Logger, mut response : reqwest::Response) -> Result<Option<EarningsDateTime>, Error> {
     let text = response.text()?;
     let document = Html::parse_document(text.as_str());
     let main_selector = Selector::parse(r#"#stock_key_earnings > table > tbody > tr:nth-child(5) > td:nth-child(2)"#).unwrap();
