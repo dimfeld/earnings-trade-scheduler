@@ -77,27 +77,36 @@ impl Display for AnnounceTime {
 }
 
 /// If the date falls on a weekend, step back to the closest weekday.
-trait DatelikeExt {
-    fn next_weekday(&self) -> Self;
-    fn prev_weekday(&self) -> Self;
+pub trait DatelikeExt {
+    /// Get the closest trading day to this one, always going backwards on a weekend.
+    fn closest_trading_day(&self) -> Self;
+    fn next_trading_day(&self) -> Self;
+    fn prev_trading_day(&self) -> Self;
+
 }
 
 impl DatelikeExt for Date {
-    fn prev_weekday(&self) -> Date {
-        let x = self.pred();
-        match x.weekday() {
-            Weekday::Sat => x - Duration::days(1),
-            Weekday::Sun => x - Duration::days(2),
-            _ => x,
+    fn closest_trading_day(&self) -> Date {
+        match self.weekday() {
+            Weekday::Sat => *self - Duration::days(1),
+            Weekday::Sun => *self - Duration::days(2),
+            _ => *self,
         }
     }
 
-    fn next_weekday(&self) -> Date {
-        let x = self.succ();
-        match x.weekday() {
-            Weekday::Sat => x + Duration::days(2),
-            Weekday::Sun => x + Duration::days(1),
-            _ => x,
+    fn next_trading_day(&self) -> Date {
+        match self.weekday() {
+            Weekday::Fri => *self + Duration::days(3),
+            Weekday::Sat => *self + Duration::days(2),
+            _ => self.succ(),
+        }
+    }
+
+    fn prev_trading_day(&self) -> Date {
+        match self.weekday() {
+            Weekday::Mon => *self - Duration::days(3),
+            Weekday::Sun => *self - Duration::days(2),
+            _ => self.pred(),
         }
     }
 }
@@ -112,7 +121,7 @@ impl EarningsDateTime {
     /// Return the date of the last trading session before the earnings announcement, along with a "fuzzy" indication
     pub fn last_session(&self) -> (Date, bool) {
         match self.time {
-            AnnounceTime::BeforeMarket => (self.date.prev_weekday(), false),
+            AnnounceTime::BeforeMarket => (self.date.prev_trading_day(), false),
             AnnounceTime::AfterMarket => (self.date, false),
             AnnounceTime::Unknown => (self.date, true),
         }
@@ -152,11 +161,11 @@ pub fn best_earnings_guess(dates : &[SourcedEarningsTime]) -> EarningsGuess {
 
         if fuzz {
             // Add entries for the next and previous weekdays
-            guesses.entry(last.next_weekday())
+            guesses.entry(last.next_trading_day())
                 .or_insert_with(Vec::new)
                 .push((date, true));
 
-            guesses.entry(last.prev_weekday())
+            guesses.entry(last.prev_trading_day())
                 .or_insert_with(Vec::new)
                 .push((date, true));
         }
@@ -195,8 +204,8 @@ pub fn best_earnings_guess(dates : &[SourcedEarningsTime]) -> EarningsGuess {
     let best_date = highest_fuzzy_date;
     let concurrences = guesses.remove(&best_date).unwrap().iter().map(|&(guess, _)| guess.clone()).collect::<Vec<_>>();
 
-    let prev_date = guesses.remove(&best_date.prev_weekday()).unwrap_or_else(Vec::new);
-    let next_date = guesses.remove(&best_date.next_weekday()).unwrap_or_else(Vec::new);
+    let prev_date = guesses.remove(&best_date.prev_trading_day()).unwrap_or_else(Vec::new);
+    let next_date = guesses.remove(&best_date.next_trading_day()).unwrap_or_else(Vec::new);
 
     let close_disagreements : Vec<SourcedEarningsTime> = prev_date.into_iter().chain(next_date.into_iter())
         .fold(Vec::new(), |mut acc, (guess, _)| {
