@@ -68,19 +68,19 @@ impl BacktestResult {
             .with_context(|e| format!("next_earnings {} : {}", input.next_earnings, e))?;
 
         let win_rate = input.win_rate.chars()
-            .take_while(|x| x.is_digit(10))
+            .take_while(|x| x.is_digit(10) || *x == '-')
             .collect::<String>()
             .parse::<i32>()
             .with_context(|e| format!("win_rate {} : {}", input.win_rate, e))?;
 
         let avg_trade_return = input.avg_trade_return.chars()
-            .take_while(|x| x.is_digit(10))
+            .take_while(|x| x.is_digit(10) || *x == '-')
             .collect::<String>()
             .parse::<i32>()
             .with_context(|e| format!("avg_trade_return {} : {}", input.avg_trade_return, e))?;
 
         let total_return = input.total_return.chars()
-            .take_while(|x| x.is_digit(10))
+            .take_while(|x| x.is_digit(10) || *x == '-')
             .collect::<String>().parse::<i32>()
             .with_context(|e| format!("total_return {} : {}", input.total_return, e))?;
 
