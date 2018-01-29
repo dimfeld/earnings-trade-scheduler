@@ -26,11 +26,11 @@ struct EarningsSource {
 }
 
 static SOURCES : &[EarningsSource] = &[
-        EarningsSource{
-            name: "Bloomberg",
-            url: "https://www.bloomberg.com/quote/{}:US",
-            extract: extract_bloomberg,
-        },
+        // EarningsSource{
+        //     name: "Bloomberg",
+        //     url: "https://www.bloomberg.com/quote/{}:US",
+        //     extract: extract_bloomberg,
+        // },
         // NASDAQ seeems to have aggressive anti-scraping measures in place, or something.
         // The data is taken from Zack's anyway, so not a big deal.
         // EarningsSource{
@@ -239,6 +239,7 @@ pub fn best_earnings_guess(dates : &[SourcedEarningsTime]) -> EarningsGuess {
     }
 }
 
+#[allow(dead_code)]
 fn extract_bloomberg(_logger : &slog::Logger, mut response : reqwest::Response) -> Result<Option<EarningsDateTime>, Error> {
     let document = Html::parse_document(response.text()?.as_str());
     let selector = Selector::parse(r#"span[class^="nextAnnouncementDate"]"#).unwrap();
