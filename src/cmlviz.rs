@@ -1,6 +1,6 @@
 use failure::{Error, ResultExt};
-use earnings::{Date, EarningsDateTime, AnnounceTime, DatelikeExt};
-use chrono::{Duration};
+use earnings::{Date, EarningsDateTime, AnnounceTime};
+use chrono::{Datelike, Duration, Weekday};
 
 #[derive(Debug,Deserialize,Serialize,Clone,Copy)]
 pub enum Strategy {
@@ -23,7 +23,15 @@ pub enum Strategy {
 impl Strategy {
     pub fn open_date(&self, last_preearnings_session : Date) -> Date {
         match *self {
-            Strategy::Call3DaysBeforeEarnings => (last_preearnings_session - Duration::days(3)).closest_trading_day(),
+            Strategy::Call3DaysBeforeEarnings => {
+                let crosses_weekend = match last_preearnings_session.weekday() {
+                    Weekday::Mon | Weekday::Tue | Weekday::Wed => true,
+                    _ => false
+                };
+
+                let delta = if crosses_weekend { 5 } else {3};
+                last_preearnings_session - Duration::days(delta)
+            },
             Strategy::Call7DaysBeforeEarnings => last_preearnings_session - Duration::days(7),
             Strategy::Call14DaysBeforeEarnings => last_preearnings_session - Duration::days(14),
             Strategy::Strangle7DaysBeforeEarnings => last_preearnings_session - Duration::days(7),
