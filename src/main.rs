@@ -155,12 +155,14 @@ fn run_it(logger : &slog::Logger) -> Result<(), Error> {
     for ((open_date, close_date, symbol), data) in tests_with_earnings {
 
         let concurrences = data.earnings.concurrences.iter().map(|x| x.source.as_ref()).join(",");
-        write!(output, "{open} - {close} : {symbol} ({avg_return}%) [{sources}]",
+        let best_test = &data.tests[data.best_test_index];
+        write!(output, "{open} - {close} : {symbol} {strategy} ({avg_return}%) [{sources}]",
             open=open_date,
             close=close_date,
             symbol=symbol,
             sources=concurrences,
-            avg_return=data.tests[data.best_test_index].avg_trade_return)?;
+            avg_return=best_test.avg_trade_return,
+            strategy=best_test.strategy.short_name())?;
 
         if data.earnings.close_disagreements.len() > 0 || data.earnings.far_disagreements.len() > 0 {
             let disagreements = data.earnings.close_disagreements.iter()

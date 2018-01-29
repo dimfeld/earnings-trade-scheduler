@@ -12,6 +12,12 @@ pub enum Strategy {
 
     #[serde(rename="call_14d_preearnings")]
     Call14DaysBeforeEarnings,
+
+    #[serde(rename="strangle_7d_preearnings")]
+    Strangle7DaysBeforeEarnings,
+
+    #[serde(rename="strangle_14d_preearnings")]
+    Strangle14DaysBeforeEarnings,
 }
 
 impl Strategy {
@@ -20,6 +26,8 @@ impl Strategy {
             Strategy::Call3DaysBeforeEarnings => (last_preearnings_session - Duration::days(3)).closest_trading_day(),
             Strategy::Call7DaysBeforeEarnings => last_preearnings_session - Duration::days(7),
             Strategy::Call14DaysBeforeEarnings => last_preearnings_session - Duration::days(14),
+            Strategy::Strangle7DaysBeforeEarnings => last_preearnings_session - Duration::days(7),
+            Strategy::Strangle14DaysBeforeEarnings => last_preearnings_session - Duration::days(14),
         }
     }
 
@@ -28,6 +36,18 @@ impl Strategy {
             Strategy::Call3DaysBeforeEarnings => last_preearnings_session,
             Strategy::Call7DaysBeforeEarnings => last_preearnings_session,
             Strategy::Call14DaysBeforeEarnings => last_preearnings_session,
+            Strategy::Strangle7DaysBeforeEarnings => last_preearnings_session,
+            Strategy::Strangle14DaysBeforeEarnings => last_preearnings_session,
+        }
+    }
+
+    pub fn short_name(&self) -> &'static str {
+        match *self {
+            Strategy::Call3DaysBeforeEarnings => "E-3 Call",
+            Strategy::Call7DaysBeforeEarnings => "E-7 Call",
+            Strategy::Call14DaysBeforeEarnings => "E-14 Call",
+            Strategy::Strangle7DaysBeforeEarnings => "E-7 Strangle",
+            Strategy::Strangle14DaysBeforeEarnings => "E-14 Strangle",
         }
     }
 }
