@@ -129,7 +129,10 @@ impl EarningsDateTime {
 
 impl Display for EarningsDateTime {
     fn fmt(&self, f : &mut Formatter) -> Result<(), fmt::Error> {
-        write!(f, "{} {}", self.date, self.time)
+        match self.time {
+            AnnounceTime::Unknown => write!(f, "{}", self.date),
+            _ => write!(f, "{} {}", self.date, self.time),
+        }
     }
 }
 

@@ -12,7 +12,9 @@ extern crate regex;
 extern crate scraper;
 extern crate serde;
 #[macro_use] extern crate serde_derive;
-#[macro_use] extern crate slog;
+extern crate serde_json;
+#[macro_use]
+extern crate slog;
 extern crate sloggers;
 extern crate clap;
 extern crate structopt;
@@ -49,10 +51,13 @@ struct Config {
     #[structopt(long="end", help="Process symbols with earnings before this date")]
     end_date : Option<earnings::Date>,
 
+    #[structopt(long="save-raw", help="Save the raw data to a JSON file")]
+    save_raw : Option<String>,
+
     #[structopt(help = "Input file")]
     input : String,
 
-    #[structopt(help="Output file")]
+    #[structopt(long="output", short="o", help="Output file")]
     output : Option<String>,
 }
 
@@ -143,8 +148,36 @@ fn run_it(logger : &slog::Logger) -> Result<(), Error> {
         .unwrap_or_else(|| Ok(Box::new(std::io::stdout())))
         .context("Opening output file")?;
 
-    for ((open_date, close_date, symbol), _) in tests_with_earnings {
-        writeln!(output, "{} - {} : {}", open_date, close_date, symbol)?;
+    let mut raw_data_output = cfg.save_raw
+        .map(|path| File::create(path))
+        .map_or(Ok(None), |v| v.map(Some))?;
+
+    for ((open_date, close_date, symbol), data) in tests_with_earnings {
+
+        let concurrences = data.earnings.concurrences.iter().map(|x| x.source.as_ref()).join(",");
+        write!(output, "{open} - {close} : {symbol} ({avg_return}%) [{sources}]",
+            open=open_date,
+            close=close_date,
+            symbol=symbol,
+            sources=concurrences,
+            avg_return=data.tests[data.best_test_index].avg_trade_return)?;
+
+        if data.earnings.close_disagreements.len() > 0 || data.earnings.far_disagreements.len() > 0 {
+            let disagreements = data.earnings.close_disagreements.iter()
+                .chain(data.earnings.far_disagreements.iter())
+                .map(|x| format!("{}: {}", x.source, x.datetime))
+                .join(",");
+            write!(output, " [{}]", disagreements)?;
+        }
+
+        write!(output, "\n")?;
+
+        raw_data_output.as_mut().map_or(Ok(()), |mut w| {
+            serde_json::to_writer(&mut w, &data)?;
+            w.write_all(b"\n")?;
+            let x : Result<(), Error> = Ok(());
+            x
+        })?;
     }
 
     Ok(())
