@@ -14,14 +14,22 @@ extern crate serde;
 #[macro_use] extern crate serde_derive;
 #[macro_use] extern crate slog;
 extern crate sloggers;
+extern crate clap;
+extern crate structopt;
+#[macro_use] extern crate structopt_derive;
 
 mod cmlviz;
 mod earnings;
 
+use failure::{Error, ResultExt};
+use itertools::Itertools;
+use std::io::Write;
+use std::fs::File;
 use sloggers::Build;
 use sloggers::terminal::TerminalLoggerBuilder;
 use std::collections::{HashMap, BTreeMap};
 use reqwest::header::{Headers, UserAgent};
+use structopt::StructOpt;
 
 fn init_logger() -> slog::Logger {
     TerminalLoggerBuilder::new()
@@ -32,6 +40,22 @@ fn init_logger() -> slog::Logger {
         .expect("building logger")
 }
 
+#[derive(StructOpt)]
+#[structopt(name="preearnings_call_scheduler", about="Pre-earnings Call Scheduler")]
+struct Config {
+    #[structopt(long="start", help="Process symbols with earnings after this date")]
+    start_date : Option<earnings::Date>,
+
+    #[structopt(long="end", help="Process symbols with earnings before this date")]
+    end_date : Option<earnings::Date>,
+
+    #[structopt(help = "Input file")]
+    input : String,
+
+    #[structopt(help="Output file")]
+    output : Option<String>,
+}
+
 #[derive(Debug,Serialize)]
 struct TestsAndEarnings {
     symbol : String,
@@ -40,14 +64,14 @@ struct TestsAndEarnings {
     earnings : earnings::EarningsGuess,
 }
 
-fn main() {
-    let logger = init_logger();
-    let filename = std::env::args().nth(1).expect("filename");
+fn run_it(logger : &slog::Logger) -> Result<(), Error> {
+    let cfg = Config::from_args();
+    let filename = &cfg.input;
 
     let mut reader = csv::ReaderBuilder::new()
         .has_headers(true)
         .from_path(&filename)
-        .expect("opening csv");
+        .context("opening csv")?;
 
 
     // Read the file and group the tests by symbol.
@@ -55,9 +79,10 @@ fn main() {
     let backtests_by_symbol = reader.deserialize::<cmlviz::BacktestResultInput>()
         .into_iter()
         .map(|t| cmlviz::BacktestResult::from_input(t?))
+        .map(|t| t.expect("csv row"))
+        .filter(|t| cfg.start_date.map_or(true, |x| t.next_earnings.date >= x) && cfg.end_date.map_or(true, |x| t.next_earnings.date <= x))
         .fold(HashMap::<String, Vec<cmlviz::BacktestResult>>::new(), |mut acc, test| {
             // Assume that the CSV data is proper so we don't do real error handling on it.
-            let test = test.expect("csv row");
 
             acc
                 .entry(test.symbol.clone())
@@ -73,7 +98,7 @@ fn main() {
     let client = reqwest::Client::builder()
         .default_headers(headers)
         .build()
-        .expect("building client");
+        .context("building client")?;
 
     let tests_with_earnings = backtests_by_symbol
         .into_iter()
@@ -109,7 +134,29 @@ fn main() {
         .collect::<BTreeMap<_, _>>();
 
     // TODO Nice output formatting
+    let mut output = cfg.output
+        .map(|path| {
+            let b = Box::new(File::create(path)?);
+            let r : Result<Box<Write>, std::io::Error> = Ok(b);
+            r
+        })
+        .unwrap_or_else(|| Ok(Box::new(std::io::stdout())))
+        .context("Opening output file")?;
+
     for ((open_date, close_date, symbol), _) in tests_with_earnings {
-        println!("{} - {} : {}", open_date, close_date, symbol);
+        writeln!(output, "{} - {} : {}", open_date, close_date, symbol)?;
+    }
+
+    Ok(())
+}
+
+fn main() {
+    let logger = init_logger();
+
+    if let Err(e) = run_it(&logger) {
+        let msg = e.causes()
+            .map(|e| e.to_string())
+            .join("\n  ");
+        error!(logger, "{}", msg);
     }
 }
