@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use failure::{Error, ResultExt};
 use scraper::{Html, Selector};
 use chrono;
-use chrono::{NaiveDate, Datelike, Weekday, Duration};
+use chrono::{NaiveDate, Datelike, Timelike, Weekday, Duration, DateTime, TimeZone, Utc};
 use regex::Regex;
 use json;
 
@@ -17,6 +17,9 @@ use json;
 enum EarningsError {
     #[fail(display = "Could not find selector")]
     SelectorNotFound,
+
+    #[fail(display = "Could not locate JSON bootstrap payload")]
+    JsonPayloadNotFound,
 }
 
 struct EarningsSource {
@@ -53,6 +56,11 @@ static SOURCES : &[EarningsSource] = &[
             url: "https://www.zacks.com/stock/quote/{}",
             extract: extract_zacks,
         },
+        EarningsSource{
+            name: "Estimize",
+            url: "https://www.estimize.com/{}",
+            extract: extract_estimize,
+        }
     ];
 
 
@@ -336,7 +344,7 @@ fn extract_yahoo(_logger : &slog::Logger, mut response : reqwest::Response) -> R
     text.as_str()
         .lines()
         .find(|line| line.starts_with(prefix))
-        .ok_or_else(|| format_err!("Could not locate JSON bootstrap payload"))
+        .ok_or_else(|| Error::from(EarningsError::JsonPayloadNotFound))
         .and_then(|line| {
             let value = json::parse(&line[prefix.len()..line.len()-1])?;
             let date = value["context"]["dispatcher"]["stores"]["QuoteSummaryStore"]["calendarEvents"]["earnings"]["earningsDate"][0]["raw"].as_i64()
@@ -384,6 +392,45 @@ fn extract_zacks(_logger : &slog::Logger, mut response : reqwest::Response) -> R
             })
         })
         .map_or(Ok(None), |v| v.map(Some)) // Switch Option<Result<T, E>> to Result<Option<T>, Error>
+}
+
+fn extract_estimize(_logger : &slog::Logger, mut response : reqwest::Response) -> Result<Option<EarningsDateTime>, Error> {
+    lazy_static! {
+        static ref RE: Regex = Regex::new(r#"^\s*presenter:"#).unwrap();
+        static ref TODAY : DateTime<Utc> = Utc::now();
+    }
+
+    let text = response.text()?;
+
+    text.as_str()
+        .lines()
+        .find(|line| RE.is_match(line))
+        .ok_or_else(|| Error::from(EarningsError::JsonPayloadNotFound))
+        .and_then(|line| {
+            let start = line.chars().position(|c| c == '{').ok_or(EarningsError::JsonPayloadNotFound)?;
+            let value = json::parse(&line[start..line.len()-1])?;
+
+            let earnings_date = value["allReleases"]
+                .members()
+                .map(|val| {
+                    let report_time = val["reportsAt"].as_i64().unwrap_or(0) / 1000;
+                    Utc.timestamp(report_time, 0)
+                })
+                .find(|date| date > &*TODAY /* This is something weird with lazy_static? Probably a better way to do this */)
+                .map(|date| {
+                    // Market closes at 4:00 PM EST. Accounting for DST we'll check for 8:00 PM UTC as the market close time.
+                    let after_market = date.hour() > 20;
+
+                    let time = if after_market { AnnounceTime::AfterMarket } else { AnnounceTime::BeforeMarket };
+
+                    EarningsDateTime{
+                        date: date.date().naive_local(),
+                        time: time,
+                    }
+                });
+
+            Ok(earnings_date)
+        })
 }
 
 pub fn get_earnings_date_estimates(logger : &slog::Logger, client : &reqwest::Client, symbol : &str) -> Vec<SourcedEarningsTime> {
