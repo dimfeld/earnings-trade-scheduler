@@ -66,7 +66,7 @@ static SOURCES : &[EarningsSource] = &[
 
 pub type Date = NaiveDate;
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum AnnounceTime {
     BeforeMarket,
     AfterMarket,
@@ -118,7 +118,7 @@ impl DatelikeExt for Date {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct EarningsDateTime{
     pub date: Date,
     pub time: AnnounceTime,
@@ -144,13 +144,13 @@ impl Display for EarningsDateTime {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SourcedEarningsTime {
     pub datetime : EarningsDateTime,
     pub source : Cow<'static, str>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EarningsGuess {
     pub last_session : Date,
     pub concurrences : Vec<SourcedEarningsTime>,
@@ -275,17 +275,23 @@ fn extract_nasdaq(_logger : &slog::Logger, mut response : reqwest::Response) -> 
         .and_then(|text| {
            RE.captures_iter(text)
             .next()
-            .map(|cap| {
-                let date = Date::parse_from_str(&cap[1], "%m/%d/%Y")?;
-                let earnings_time = match &cap[2] {
-                    "after market close" => AnnounceTime::AfterMarket,
-                    "before market open" => AnnounceTime::BeforeMarket,
-                    _ => AnnounceTime::Unknown,
-                };
+            .and_then(|cap| {
 
-                Ok(EarningsDateTime{
-                    date: date,
-                    time: earnings_time,
+                let earnings_time = cap.get(2)
+                    .map_or(AnnounceTime::Unknown, |m| {
+                        match m.as_str() {
+                            "after market close" => AnnounceTime::AfterMarket,
+                            "before market open" => AnnounceTime::BeforeMarket,
+                            _ => AnnounceTime::Unknown,
+                        }
+                    });
+
+                cap.get(1).map(|m| {
+                    let date = Date::parse_from_str(m.as_str(), "%m/%d/%Y")?;
+                    Ok(EarningsDateTime{
+                        date: date,
+                        time: earnings_time,
+                    })
                 })
             })
 
@@ -309,30 +315,33 @@ fn extract_finviz(_logger : &slog::Logger, mut response : reqwest::Response) -> 
         .and_then(|text| {
             RE.captures_iter(text)
                 .next()
-                .map(|cap| {
+                .and_then(|cap| {
+                    let earnings_time = cap.get(2).map_or(AnnounceTime::Unknown, |m| {
+                        match m.as_str() {
+                            "AMC" => AnnounceTime::AfterMarket,
+                            "BMO" => AnnounceTime::BeforeMarket,
+                            _ => AnnounceTime::Unknown,
+                        }
+                    });
+
                     // Special date parsing because this one doesn't include the year.
-                    let mut parsed = chrono::format::Parsed::new();
-                    chrono::format::parse(&mut parsed, &cap[1], chrono::format::strftime::StrftimeItems::new("%b %d"))?;
+                    cap.get(1).map(|text| {
+                        let mut parsed = chrono::format::Parsed::new();
+                        chrono::format::parse(&mut parsed, text.as_str(), chrono::format::strftime::StrftimeItems::new("%b %d"))?;
+                        let today = chrono::Local::today().naive_local();
+                        let mut date = Date::from_ymd(today.year(), parsed.month.unwrap(), parsed.day.unwrap());
+                        // If it's in the past (minus a bit of buffer for recent earnings), then it's probably next year.
+                        if date < (today - Duration::days(30)) {
+                            date = date.with_year(date.year() + 1).unwrap();
+                        }
 
-                    let today = chrono::Local::today().naive_local();
-                    let mut date = Date::from_ymd(today.year(), parsed.month.unwrap(), parsed.day.unwrap());
-                    // If it's in the past (minus a bit of buffer for recent earnings), then it's probably next year.
-                    if date < (today - Duration::days(30)) {
-                        date = date.with_year(date.year() + 1).unwrap();
-                    }
-
-                    // let date = Date::parse_from_str(&cap[1], "%b %d")?;
-                    let earnings_time = match &cap[2] {
-                        "AMC" => AnnounceTime::AfterMarket,
-                        "BMO" => AnnounceTime::BeforeMarket,
-                        _ => AnnounceTime::Unknown,
-                    };
-
-                    Ok(EarningsDateTime {
-                        date: date,
-                        time: earnings_time,
+                        Ok(EarningsDateTime {
+                            date: date,
+                            time: earnings_time,
+                        })
                     })
                 })
+
         })
         .map_or(Ok(None), |v| v.map(Some)) // Switch Option<Result<T, E>> to Result<Option<T>, Error>
 }
