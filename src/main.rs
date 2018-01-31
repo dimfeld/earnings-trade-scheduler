@@ -33,6 +33,8 @@ use std::collections::{HashMap, BTreeMap};
 use reqwest::header::{Headers, UserAgent};
 use structopt::StructOpt;
 
+static EARNINGS_CACHE_NAME : &'static str = ".earnings_cache.json";
+
 fn init_logger() -> slog::Logger {
     TerminalLoggerBuilder::new()
         .level(sloggers::types::Severity::Debug)
@@ -105,20 +107,37 @@ fn run_it(logger : &slog::Logger) -> Result<(), Error> {
         .build()
         .context("building client")?;
 
+    let mut earnings_cache : HashMap<String, earnings::EarningsGuess> = std::fs::File::open(EARNINGS_CACHE_NAME)
+        .map_err(Error::from)
+        .and_then(|f| serde_json::from_reader(f).map_err(Error::from))
+        .unwrap_or_else(|e| {
+            warn!(logger, "Couldn't load earnings cache: {}", e);
+            HashMap::new()
+        });
+
+    let today = chrono::Local::today().naive_local();
     let tests_with_earnings = backtests_by_symbol
         .into_iter()
         .map(|(symbol, tests)| {
             info!(logger, "Processing symbol {}", symbol);
 
             // Figure out our best guess at the earnings date based on the CML data and a bunch of other sources.
-            let mut earnings_dates = earnings::get_earnings_date_estimates(&logger, &client, symbol.as_str());
-            let test_date = earnings::SourcedEarningsTime{
-                source: "CML".into(),
-                datetime: tests[0].next_earnings,
-            };
-            earnings_dates.push(test_date);
+            let mut guess = earnings_cache.get(&symbol)
+                .and_then(|guess| if guess.last_session < today { None } else { Some(guess.clone()) } );
 
-            let guess = earnings::best_earnings_guess(&earnings_dates);
+            if guess.is_none() {
+                let mut earnings_dates = earnings::get_earnings_date_estimates(&logger, &client, symbol.as_str());
+                let test_date = earnings::SourcedEarningsTime{
+                    source: "CML".into(),
+                    datetime: tests[0].next_earnings,
+                };
+                earnings_dates.push(test_date);
+                let new_guess = earnings::best_earnings_guess(&earnings_dates);
+                earnings_cache.insert(symbol.clone(), new_guess.clone());
+                guess = Some(new_guess);
+            }
+
+            let guess = guess.unwrap();
 
             // The "best test" is just the one that has the highest average trade return.
             // In general the win rates for the various strategies are close enough that it's not worth factoring it in
@@ -132,11 +151,16 @@ fn run_it(logger : &slog::Logger) -> Result<(), Error> {
                 symbol: symbol,
                 tests: tests,
                 best_test_index: best_test,
-                earnings: guess,
+                earnings: guess.clone(),
             };
             (key, result)
         })
         .collect::<BTreeMap<_, _>>();
+
+    std::fs::File::create(EARNINGS_CACHE_NAME)
+        .map_err(Error::from)
+        .and_then(|f| serde_json::to_writer(f, &earnings_cache).map_err(Error::from))
+        .context("writing earnings cache")?;
 
     // TODO Nice output formatting
     let mut output = cfg.output
