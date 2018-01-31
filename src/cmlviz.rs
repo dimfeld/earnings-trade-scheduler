@@ -91,26 +91,27 @@ impl BacktestResult {
     fn sort_key(&self) -> i32 { self.avg_trade_return }
 
     pub fn from_input(input : BacktestResultInput) -> Result<BacktestResult, Error> {
-        let earnings_date = Date::parse_from_str(input.next_earnings.as_str(), "%Y‑%m‑%d")
+        let earnings_str = input.next_earnings.replace("Not Verified", "");
+        let earnings_date = Date::parse_from_str(earnings_str.as_str(), "%Y‑%m‑%d")
             .map(|d| EarningsDateTime{date: d, time: AnnounceTime::Unknown})
             .with_context(|e| format!("next_earnings `{}` {}", input.next_earnings, e))?;
 
         let win_rate = input.win_rate.chars()
-            .take_while(|x| x.is_digit(10) || *x == '‑')
+            .take_while(|x| x.is_digit(10) || *x == '‑' || *x == '-') // These are actually two different dash characters
             .map(|x| if x == '‑' { '-' } else {x})
             .collect::<String>()
             .parse::<i32>()
             .with_context(|e| format!("win_rate {} : {}", input.win_rate, e))?;
 
         let avg_trade_return = input.avg_trade_return.chars()
-            .take_while(|x| x.is_digit(10) || *x == '‑')
+            .take_while(|x| x.is_digit(10) || *x == '‑' || *x == '-')
             .map(|x| if x == '‑' { '-' } else {x})
             .collect::<String>()
             .parse::<i32>()
             .with_context(|e| format!("avg_trade_return {} : {}", input.avg_trade_return, e))?;
 
         let total_return = input.total_return.chars()
-            .take_while(|x| x.is_digit(10) || *x == '‑')
+            .take_while(|x| x.is_digit(10) || *x == '‑' || *x == '-')
             .map(|x| if x == '‑' { '-' } else {x})
             .collect::<String>().parse::<i32>()
             .with_context(|e| format!("total_return {} : {}", input.total_return, e))?;
