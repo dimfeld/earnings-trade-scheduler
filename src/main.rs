@@ -64,6 +64,12 @@ struct Config {
 
     #[structopt(long="strategy", short="s", help="Strategies to include")]
     strategies : Vec<cmlviz::Strategy>,
+
+    #[structopt(long="post", help="Include only post-earnings strategies")]
+    post_earnings : bool,
+
+    #[structopt(long="pre", help="Include only pre-earnings strategies")]
+    pre_earnings : bool,
 }
 
 #[derive(Debug,Serialize)]
@@ -75,14 +81,21 @@ struct TestsAndEarnings {
 }
 
 fn run_it(logger : &slog::Logger) -> Result<(), Error> {
-    let cfg = Config::from_args();
+    let mut cfg = Config::from_args();
     let filename = &cfg.input;
+
+    if cfg.post_earnings {
+        cfg.strategies.extend(cmlviz::Strategy::postearnings_strategies().into_iter());
+    }
+
+    if cfg.pre_earnings {
+        cfg.strategies.extend(cmlviz::Strategy::preearnings_strategies().into_iter());
+    }
 
     let mut reader = csv::ReaderBuilder::new()
         .has_headers(true)
         .from_path(&filename)
         .context("opening csv")?;
-
 
     // Read the file and group the tests by symbol.
     info!(logger, "Reading file {}", filename);

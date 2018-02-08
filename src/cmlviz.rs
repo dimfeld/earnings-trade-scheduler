@@ -44,6 +44,14 @@ impl FromStr for Strategy {
 }
 
 impl Strategy {
+    pub fn preearnings_strategies() -> Vec<Strategy> {
+        vec![Strategy::Call3DaysBeforeEarnings, Strategy::Call7DaysBeforeEarnings, Strategy::Call14DaysBeforeEarnings, Strategy::Strangle7DaysBeforeEarnings, Strategy::Strangle14DaysBeforeEarnings]
+    }
+
+    pub fn postearnings_strategies() -> Vec<Strategy> {
+        vec![Strategy::PutSpreadAfterEarnings, Strategy::IronCondorAfterEarnings]
+    }
+
     pub fn open_date(&self, last_preearnings_session : Date) -> Date {
         match *self {
             Strategy::Call3DaysBeforeEarnings => {
