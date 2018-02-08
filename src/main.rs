@@ -111,8 +111,6 @@ fn run_it(logger : &slog::Logger) -> Result<(), Error> {
             cfg.start_date.map_or(true, |x| t.next_earnings.date >= x) && cfg.end_date.map_or(true, |x| t.next_earnings.date <= x)
         })
         .fold(HashMap::<String, Vec<cmlviz::BacktestResult>>::new(), |mut acc, test| {
-            // Assume that the CSV data is proper so we don't do real error handling on it.
-
             acc
                 .entry(test.symbol.clone())
                 .or_insert_with(Vec::new)
@@ -137,7 +135,7 @@ fn run_it(logger : &slog::Logger) -> Result<(), Error> {
             HashMap::new()
         });
 
-    let today = chrono::Local::today().naive_local();
+    let uptodate_earnings_threshold = chrono::Local::today().naive_local() - chrono::Duration::days(2);
     let tests_with_earnings = backtests_by_symbol
         .into_iter()
         .map(|(symbol, tests)| {
@@ -145,7 +143,7 @@ fn run_it(logger : &slog::Logger) -> Result<(), Error> {
 
             // Figure out our best guess at the earnings date based on the CML data and a bunch of other sources.
             let mut guess = earnings_cache.get(&symbol)
-                .and_then(|guess| if guess.last_session < today { None } else { Some(guess.clone()) } );
+                .and_then(|guess| if guess.last_session < uptodate_earnings_threshold { None } else { Some(guess.clone()) } );
 
             if guess.is_none() {
                 let mut earnings_dates = earnings::get_earnings_date_estimates(&logger, &client, symbol.as_str());
@@ -202,12 +200,14 @@ fn run_it(logger : &slog::Logger) -> Result<(), Error> {
 
         let concurrences = data.earnings.concurrences.iter().map(|x| x.source.as_ref()).join(",");
         let best_test = &data.tests[data.best_test_index];
-        write!(output, "{open} - {close} : {symbol} {strategy} ({avg_return}%) [{sources}]",
+        write!(output, "{open} - {close} : {symbol} {strategy} ({avg_return}%, {wins}/{losses}) [{sources}]",
             open=open_date,
             close=close_date,
             symbol=symbol,
             sources=concurrences,
             avg_return=best_test.avg_trade_return,
+            wins=best_test.wins,
+            losses=best_test.losses,
             strategy=best_test.strategy.short_name())?;
 
         if data.earnings.close_disagreements.len() > 0 || data.earnings.far_disagreements.len() > 0 {
