@@ -25,6 +25,9 @@ pub enum Strategy {
 
     #[serde(rename="iron_condor_post_earnings")]
     IronCondorAfterEarnings,
+
+    #[serde(rename="long_straddle_post_earnings")]
+    LongStraddleAfterEarnings,
 }
 
 impl FromStr for Strategy {
@@ -38,6 +41,7 @@ impl FromStr for Strategy {
             "strangle_14d_preearnings" => Ok(Strategy::Strangle14DaysBeforeEarnings),
             "put_spread_post_earnings" => Ok(Strategy::PutSpreadAfterEarnings),
             "iron_condor_post_earnings" => Ok(Strategy::IronCondorAfterEarnings),
+            "long_straddle_post_earnings" => Ok(Strategy::LongStraddleAfterEarnings),
             _ => Err(err_msg(format!("Unknown strategy {}", s))),
         }
     }
@@ -49,7 +53,7 @@ impl Strategy {
     }
 
     pub fn postearnings_strategies() -> Vec<Strategy> {
-        vec![Strategy::PutSpreadAfterEarnings, Strategy::IronCondorAfterEarnings]
+        vec![Strategy::PutSpreadAfterEarnings, Strategy::IronCondorAfterEarnings, Strategy::LongStraddleAfterEarnings]
     }
 
     pub fn open_date(&self, last_preearnings_session : Date) -> Date {
@@ -66,20 +70,23 @@ impl Strategy {
             Strategy::Call14DaysBeforeEarnings => last_preearnings_session - Duration::days(14),
             Strategy::Strangle7DaysBeforeEarnings => last_preearnings_session - Duration::days(7),
             Strategy::Strangle14DaysBeforeEarnings => last_preearnings_session - Duration::days(14),
-            Strategy::PutSpreadAfterEarnings | Strategy::IronCondorAfterEarnings => last_preearnings_session.next_trading_day(),
+            Strategy::PutSpreadAfterEarnings | Strategy::IronCondorAfterEarnings | Strategy::LongStraddleAfterEarnings => last_preearnings_session.next_trading_day(),
         }
     }
 
     pub fn close_date(&self, last_preearnings_session : Date) -> Date {
-        match *self {
+        let close = match *self {
             Strategy::Call3DaysBeforeEarnings => last_preearnings_session,
             Strategy::Call7DaysBeforeEarnings => last_preearnings_session,
             Strategy::Call14DaysBeforeEarnings => last_preearnings_session,
             Strategy::Strangle7DaysBeforeEarnings => last_preearnings_session,
             Strategy::Strangle14DaysBeforeEarnings => last_preearnings_session,
-            Strategy::PutSpreadAfterEarnings => (last_preearnings_session + Duration::days(22)).closest_trading_day(),
-            Strategy::IronCondorAfterEarnings => (last_preearnings_session + Duration::days(32)).closest_trading_day(),
-        }
+            Strategy::PutSpreadAfterEarnings => last_preearnings_session + Duration::days(22),
+            Strategy::IronCondorAfterEarnings => last_preearnings_session + Duration::days(32),
+            Strategy::LongStraddleAfterEarnings => last_preearnings_session + Duration::days(8),
+        };
+
+        close.closest_trading_day()
     }
 
     pub fn short_name(&self) -> &'static str {
@@ -91,6 +98,7 @@ impl Strategy {
             Strategy::Strangle14DaysBeforeEarnings => "E-14 Strangle",
             Strategy::IronCondorAfterEarnings => "E+1 Iron Condor",
             Strategy::PutSpreadAfterEarnings => "E+1 Put Spread",
+            Strategy::LongStraddleAfterEarnings => "E+1 Long Straddle",
         }
     }
 }
