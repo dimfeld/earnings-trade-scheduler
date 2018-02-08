@@ -20,7 +20,7 @@ pub enum Strategy {
     #[serde(rename="strangle_14d_preearnings")]
     Strangle14DaysBeforeEarnings,
 
-    #[serde(rename="put_spread_post_earningsx")]
+    #[serde(rename="put_spread_post_earnings")]
     PutSpreadAfterEarnings,
 
     #[serde(rename="iron_condor_post_earnings")]
