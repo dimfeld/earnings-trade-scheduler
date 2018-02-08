@@ -61,6 +61,9 @@ struct Config {
 
     #[structopt(long="output", short="o", help="Output file")]
     output : Option<String>,
+
+    #[structopt(long="strategy", short="s", help="Strategies to include")]
+    strategies : Vec<cmlviz::Strategy>,
 }
 
 #[derive(Debug,Serialize)]
@@ -87,7 +90,13 @@ fn run_it(logger : &slog::Logger) -> Result<(), Error> {
         .into_iter()
         .map(|t| cmlviz::BacktestResult::from_input(t?))
         .map(|t| t.expect("csv row"))
-        .filter(|t| cfg.start_date.map_or(true, |x| t.next_earnings.date >= x) && cfg.end_date.map_or(true, |x| t.next_earnings.date <= x))
+        .filter(|t| {
+            if cfg.strategies.len() > 0 && cfg.strategies.iter().find(|&&x| x == t.strategy).is_none() {
+                return false
+            }
+
+            cfg.start_date.map_or(true, |x| t.next_earnings.date >= x) && cfg.end_date.map_or(true, |x| t.next_earnings.date <= x)
+        })
         .fold(HashMap::<String, Vec<cmlviz::BacktestResult>>::new(), |mut acc, test| {
             // Assume that the CSV data is proper so we don't do real error handling on it.
 

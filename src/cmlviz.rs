@@ -1,8 +1,9 @@
-use failure::{Error, ResultExt};
-use earnings::{Date, EarningsDateTime, AnnounceTime};
+use failure::{Error, ResultExt, err_msg};
+use earnings::{Date, DatelikeExt, EarningsDateTime, AnnounceTime};
 use chrono::{Datelike, Duration, Weekday};
+use std::str::FromStr;
 
-#[derive(Debug,Deserialize,Serialize,Clone,Copy)]
+#[derive(Debug,Deserialize,Serialize,Clone,Copy,PartialEq,Eq)]
 pub enum Strategy {
     #[serde(rename="call_3d_preearnings")]
     Call3DaysBeforeEarnings,
@@ -18,24 +19,46 @@ pub enum Strategy {
 
     #[serde(rename="strangle_14d_preearnings")]
     Strangle14DaysBeforeEarnings,
+
+    #[serde(rename="put_spread_post_earningsx")]
+    PutSpreadAfterEarnings,
+
+    #[serde(rename="iron_condor_post_earnings")]
+    IronCondorAfterEarnings,
+}
+
+impl FromStr for Strategy {
+    type Err = Error;
+    fn from_str(s : &str) -> Result<Self, Self::Err> {
+        match s {
+            "call_3d_preearnings" => Ok(Strategy::Call3DaysBeforeEarnings),
+            "call_7d_preearnings" => Ok(Strategy::Call7DaysBeforeEarnings),
+            "call_14d_preearnings" => Ok(Strategy::Call14DaysBeforeEarnings),
+            "strangle_7d_preearnings" => Ok(Strategy::Strangle7DaysBeforeEarnings),
+            "strangle_14d_preearnings" => Ok(Strategy::Strangle14DaysBeforeEarnings),
+            "put_spread_post_earnings" => Ok(Strategy::PutSpreadAfterEarnings),
+            "iron_condor_post_earnings" => Ok(Strategy::IronCondorAfterEarnings),
+            _ => Err(err_msg(format!("Unknown strategy {}", s))),
+        }
+    }
 }
 
 impl Strategy {
     pub fn open_date(&self, last_preearnings_session : Date) -> Date {
         match *self {
             Strategy::Call3DaysBeforeEarnings => {
-                let crosses_weekend = match last_preearnings_session.weekday() {
-                    Weekday::Mon | Weekday::Tue | Weekday::Wed => true,
-                    _ => false
+                let delta = match last_preearnings_session.weekday() {
+                    Weekday::Mon | Weekday::Tue | Weekday::Wed => 5,
+                    _ => 3
                 };
 
-                let delta = if crosses_weekend { 5 } else {3};
                 last_preearnings_session - Duration::days(delta)
             },
             Strategy::Call7DaysBeforeEarnings => last_preearnings_session - Duration::days(7),
             Strategy::Call14DaysBeforeEarnings => last_preearnings_session - Duration::days(14),
             Strategy::Strangle7DaysBeforeEarnings => last_preearnings_session - Duration::days(7),
             Strategy::Strangle14DaysBeforeEarnings => last_preearnings_session - Duration::days(14),
+            Strategy::PutSpreadAfterEarnings | Strategy::IronCondorAfterEarnings => last_preearnings_session.next_trading_day(),
         }
     }
 
@@ -46,6 +69,8 @@ impl Strategy {
             Strategy::Call14DaysBeforeEarnings => last_preearnings_session,
             Strategy::Strangle7DaysBeforeEarnings => last_preearnings_session,
             Strategy::Strangle14DaysBeforeEarnings => last_preearnings_session,
+            Strategy::PutSpreadAfterEarnings => (last_preearnings_session + Duration::days(22)).closest_trading_day(),
+            Strategy::IronCondorAfterEarnings => (last_preearnings_session + Duration::days(32)).closest_trading_day(),
         }
     }
 
@@ -56,6 +81,8 @@ impl Strategy {
             Strategy::Call14DaysBeforeEarnings => "E-14 Call",
             Strategy::Strangle7DaysBeforeEarnings => "E-7 Strangle",
             Strategy::Strangle14DaysBeforeEarnings => "E-14 Strangle",
+            Strategy::IronCondorAfterEarnings => "E+1 Iron Condor",
+            Strategy::PutSpreadAfterEarnings => "E+1 Put Spread",
         }
     }
 }
