@@ -1,7 +1,7 @@
 [package]
-name = "preearnings-call-scheduler"
-version = "0.1.0"
-authors = ["Daniel Imfeld <daniel@danielimfeld.com>"]
+name = "earnings-trade-scheduler"
+version = "1.0.0"
+authors = ["Daniel Imfeld <dimfeld>"]
 
 [dependencies]
 chrono = { version = "0.4.0", features = ["serde"] }

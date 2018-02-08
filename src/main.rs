@@ -45,7 +45,7 @@ fn init_logger() -> slog::Logger {
 }
 
 #[derive(StructOpt)]
-#[structopt(name="preearnings_call_scheduler", about="Pre-earnings Call Scheduler")]
+#[structopt(name="earnings-trade-scheduler", about="Earnings Trade Scheduler")]
 struct Config {
     #[structopt(long="start", help="Process symbols with earnings after this date")]
     start_date : Option<earnings::Date>,

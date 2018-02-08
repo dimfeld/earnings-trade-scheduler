@@ -11,27 +11,35 @@ The `strategy` column should be one of these values depending on the strategy yo
 * `call_14d_preearnings`
 * `strangle_7d_preearnings`
 * `strangle_14d_preearnings`
+* `iron_condor_postearnings`
+* `put_spread_postearnings`
+* `long_straddle_postearnings`
 
 If this sounds like a hassle, well, it is. But this utility saves me hours of work each week that I was spending picking the best strategy to use and verifying the correct earnings date.
 
 ### Usage
 
 ```
-> preearnings-call-scheduler --help
-Pre-earnings Call Scheduler
+> earnings-trade-scheduler --help
+earnings-trade-scheduler 1.0.0
+Daniel Imfeld <dimfeld>
+Earnings Trade Scheduler
 
 USAGE:
-    preearnings-call-scheduler [OPTIONS] <input>
+    earnings-trade-scheduler [FLAGS] [OPTIONS] <input>
 
 FLAGS:
     -h, --help       Prints help information
+        --post       Include only post-earnings strategies
+        --pre        Include only pre-earnings strategies
     -V, --version    Prints version information
 
 OPTIONS:
-        --end <end_date>         Process symbols with earnings before this date
-    -o, --output <output>        Output file
-        --save-raw <save_raw>    Save the raw data to a JSON file
-        --start <start_date>     Process symbols with earnings after this date
+        --end <end_date>              Process symbols with earnings before this date
+    -o, --output <output>             Output file
+        --save-raw <save_raw>         Save the raw data to a JSON file
+        --start <start_date>          Process symbols with earnings after this date
+    -s, --strategy <strategies>...    Strategies to include
 
 ARGS:
     <input>    Input file
