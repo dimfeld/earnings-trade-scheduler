@@ -198,17 +198,41 @@ fn run_it(logger : &slog::Logger) -> Result<(), Error> {
 
     for ((open_date, close_date, symbol), data) in tests_with_earnings {
 
-        let concurrences = data.earnings.concurrences.iter().map(|x| x.source.as_ref()).join(",");
         let best_test = &data.tests[data.best_test_index];
-        write!(output, "{open} - {close} : {symbol} {strategy} ({avg_return}%, {wins}/{losses}) [{sources}]",
+        let best_strategy = best_test.strategy;
+        let best_of_other_strategies = data.tests
+            .iter()
+            .fold(HashMap::new(), |mut acc : HashMap<cmlviz::Strategy, &cmlviz::BacktestResult>, test| {
+                // Don't include the best strategy since we're displaying that separately.
+                if test.strategy != best_strategy {
+                    let x = acc.entry(test.strategy).or_insert(test);
+                    if (*x).sort_key() < test.sort_key() {
+                        *x = test;
+                    }
+                }
+                acc
+            });
+
+        let mut best_others_sorted_by_return = best_of_other_strategies
+            .into_iter()
+            .collect::<Vec<(cmlviz::Strategy, &cmlviz::BacktestResult)>>();
+        best_others_sorted_by_return.sort_by_key(|&(_, x)| -x.sort_key());
+        let other_strategies = best_others_sorted_by_return
+            .iter()
+            .map(|&(strategy, test)| format!("{}{}", strategy.abbreviation(), test.stats()) )
+            .join(", ");
+
+        let concurrences = data.earnings.concurrences.iter().map(|x| x.source.as_ref()).join(",");
+
+        let best_strategy_desc = format!("{} {}", best_test.strategy.short_name(), best_test.stats());
+
+        write!(output, "{open} - {close} : {symbol} {best_strategy} [{other_strategies}] [{sources}]",
             open=open_date,
             close=close_date,
             symbol=symbol,
             sources=concurrences,
-            avg_return=best_test.avg_trade_return,
-            wins=best_test.wins,
-            losses=best_test.losses,
-            strategy=best_test.strategy.short_name())?;
+            best_strategy=best_strategy_desc,
+            other_strategies=other_strategies)?;
 
         if data.earnings.close_disagreements.len() > 0 || data.earnings.far_disagreements.len() > 0 {
             let disagreements = data.earnings.close_disagreements.iter()

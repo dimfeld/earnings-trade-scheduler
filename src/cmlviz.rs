@@ -3,7 +3,7 @@ use earnings::{Date, DatelikeExt, EarningsDateTime, AnnounceTime};
 use chrono::{Datelike, Duration, Weekday};
 use std::str::FromStr;
 
-#[derive(Debug,Deserialize,Serialize,Clone,Copy,PartialEq,Eq)]
+#[derive(Debug,Deserialize,Serialize,Clone,Copy,PartialEq,Eq,Hash)]
 pub enum Strategy {
     #[serde(rename="call_3d_preearnings")]
     Call3DaysBeforeEarnings,
@@ -101,6 +101,19 @@ impl Strategy {
             Strategy::LongStraddleAfterEarnings => "E+1 Long Straddle",
         }
     }
+
+    pub fn abbreviation(&self) -> &str {
+        match *self {
+            Strategy::Call3DaysBeforeEarnings => "E-3C",
+            Strategy::Call7DaysBeforeEarnings => "E-7C",
+            Strategy::Call14DaysBeforeEarnings => "E-14C",
+            Strategy::Strangle7DaysBeforeEarnings => "E-7S",
+            Strategy::Strangle14DaysBeforeEarnings => "E-14S",
+            Strategy::IronCondorAfterEarnings => "E+1IC",
+            Strategy::PutSpreadAfterEarnings => "E+1P",
+            Strategy::LongStraddleAfterEarnings => "E+1LS",
+        }
+    }
 }
 
 #[derive(Debug,Deserialize)]
@@ -131,7 +144,11 @@ pub struct BacktestResult {
 
 impl BacktestResult {
     #[inline]
-    fn sort_key(&self) -> i32 { self.avg_trade_return }
+    pub fn sort_key(&self) -> isize { self.avg_trade_return as isize }
+
+    pub fn stats(&self) -> String {
+        format!("({avg_return}%,{wins}/{losses})", avg_return=self.avg_trade_return, wins=self.wins, losses=self.losses)
+    }
 
     pub fn from_input(input : BacktestResultInput) -> Result<BacktestResult, Error> {
         let earnings_str = input.next_earnings.replace("Not Verified", "");
