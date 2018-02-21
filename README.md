@@ -44,3 +44,7 @@ OPTIONS:
 ARGS:
     <input>    Input file
 ```
+
+### Disclaimer
+
+Past performance is not indicative of future results, and the results from this tool should not be used as the sole determinant of whether to make a trade. Perform due diligence and consider all aspects of a potential trade before you execute. See sections 7 through 9 of LICENSE for the full legal disclaimer.
