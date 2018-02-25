@@ -14,6 +14,9 @@ pub enum Strategy {
     #[serde(rename="call_14d_preearnings")]
     Call14DaysBeforeEarnings,
 
+    #[serde(rename="strangle_4d_preearnings")]
+    Strangle4DaysBeforeEarnings,
+
     #[serde(rename="strangle_7d_preearnings")]
     Strangle7DaysBeforeEarnings,
 
@@ -37,6 +40,7 @@ impl FromStr for Strategy {
             "call_3d_preearnings" => Ok(Strategy::Call3DaysBeforeEarnings),
             "call_7d_preearnings" => Ok(Strategy::Call7DaysBeforeEarnings),
             "call_14d_preearnings" => Ok(Strategy::Call14DaysBeforeEarnings),
+            "strangle_4d_preearnings" => Ok(Strategy::Strangle4DaysBeforeEarnings),
             "strangle_7d_preearnings" => Ok(Strategy::Strangle7DaysBeforeEarnings),
             "strangle_14d_preearnings" => Ok(Strategy::Strangle14DaysBeforeEarnings),
             "put_spread_post_earnings" => Ok(Strategy::PutSpreadAfterEarnings),
@@ -49,7 +53,7 @@ impl FromStr for Strategy {
 
 impl Strategy {
     pub fn preearnings_strategies() -> Vec<Strategy> {
-        vec![Strategy::Call3DaysBeforeEarnings, Strategy::Call7DaysBeforeEarnings, Strategy::Call14DaysBeforeEarnings, Strategy::Strangle7DaysBeforeEarnings, Strategy::Strangle14DaysBeforeEarnings]
+        vec![Strategy::Call3DaysBeforeEarnings, Strategy::Call7DaysBeforeEarnings, Strategy::Call14DaysBeforeEarnings, Strategy::Strangle4DaysBeforeEarnings, Strategy::Strangle7DaysBeforeEarnings, Strategy::Strangle14DaysBeforeEarnings]
     }
 
     pub fn postearnings_strategies() -> Vec<Strategy> {
@@ -68,6 +72,14 @@ impl Strategy {
             },
             Strategy::Call7DaysBeforeEarnings => last_preearnings_session - Duration::days(7),
             Strategy::Call14DaysBeforeEarnings => last_preearnings_session - Duration::days(14),
+            Strategy::Strangle4DaysBeforeEarnings => {
+                let delta = match last_preearnings_session.weekday() {
+                    Weekday::Mon | Weekday::Tue | Weekday::Wed | Weekday::Thu => 6,
+                    _ => 4,
+                };
+
+                last_preearnings_session - Duration::days(delta)
+            },
             Strategy::Strangle7DaysBeforeEarnings => last_preearnings_session - Duration::days(7),
             Strategy::Strangle14DaysBeforeEarnings => last_preearnings_session - Duration::days(14),
             Strategy::PutSpreadAfterEarnings | Strategy::IronCondorAfterEarnings | Strategy::LongStraddleAfterEarnings => last_preearnings_session.next_trading_day(),
@@ -79,6 +91,7 @@ impl Strategy {
             Strategy::Call3DaysBeforeEarnings => last_preearnings_session,
             Strategy::Call7DaysBeforeEarnings => last_preearnings_session,
             Strategy::Call14DaysBeforeEarnings => last_preearnings_session,
+            Strategy::Strangle4DaysBeforeEarnings => last_preearnings_session,
             Strategy::Strangle7DaysBeforeEarnings => last_preearnings_session,
             Strategy::Strangle14DaysBeforeEarnings => last_preearnings_session,
             Strategy::PutSpreadAfterEarnings => last_preearnings_session + Duration::days(22),
@@ -94,6 +107,7 @@ impl Strategy {
             Strategy::Call3DaysBeforeEarnings => "E-3 Call",
             Strategy::Call7DaysBeforeEarnings => "E-7 Call",
             Strategy::Call14DaysBeforeEarnings => "E-14 Call",
+            Strategy::Strangle4DaysBeforeEarnings => "E-4 Strangle",
             Strategy::Strangle7DaysBeforeEarnings => "E-7 Strangle",
             Strategy::Strangle14DaysBeforeEarnings => "E-14 Strangle",
             Strategy::IronCondorAfterEarnings => "E+1 Iron Condor",
@@ -107,6 +121,7 @@ impl Strategy {
             Strategy::Call3DaysBeforeEarnings => "E-3C",
             Strategy::Call7DaysBeforeEarnings => "E-7C",
             Strategy::Call14DaysBeforeEarnings => "E-14C",
+            Strategy::Strangle4DaysBeforeEarnings => "E-4S",
             Strategy::Strangle7DaysBeforeEarnings => "E-7S",
             Strategy::Strangle14DaysBeforeEarnings => "E-14S",
             Strategy::IronCondorAfterEarnings => "E+1IC",
