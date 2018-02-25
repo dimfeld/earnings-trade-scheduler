@@ -158,7 +158,7 @@ pub struct EarningsGuess {
     pub far_disagreements : Vec<SourcedEarningsTime>,
 }
 
-pub fn best_earnings_guess(dates : &[SourcedEarningsTime]) -> EarningsGuess {
+pub fn best_earnings_guess(dates : &[SourcedEarningsTime]) -> Option<EarningsGuess> {
 
     let mut guesses : HashMap<Date, Vec<(&SourcedEarningsTime, bool)>> = HashMap::new();
 
@@ -210,9 +210,12 @@ pub fn best_earnings_guess(dates : &[SourcedEarningsTime]) -> EarningsGuess {
         }
     }
 
+    if highest_fuzzy_count == 0 {
+        return None
+    }
 
     let best_date = highest_fuzzy_date;
-    let concurrences = guesses.remove(&best_date).unwrap().iter().map(|&(guess, _)| guess.clone()).collect::<Vec<_>>();
+    let concurrences = guesses.remove(&best_date).unwrap_or_else(Vec::new).iter().map(|&(guess, _)| guess.clone()).collect::<Vec<_>>();
 
     let prev_date = guesses.remove(&best_date.prev_trading_day()).unwrap_or_else(Vec::new);
     let next_date = guesses.remove(&best_date.next_trading_day()).unwrap_or_else(Vec::new);
@@ -239,12 +242,12 @@ pub fn best_earnings_guess(dates : &[SourcedEarningsTime]) -> EarningsGuess {
             acc
         });
 
-    EarningsGuess {
+    Some(EarningsGuess {
         last_session: best_date,
         concurrences: concurrences,
         close_disagreements: close_disagreements,
         far_disagreements: far_disagreements,
-    }
+    })
 }
 
 #[allow(dead_code)]

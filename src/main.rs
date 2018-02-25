@@ -138,7 +138,7 @@ fn run_it(logger : &slog::Logger) -> Result<(), Error> {
     let uptodate_earnings_threshold = chrono::Local::today().naive_local() - chrono::Duration::days(2);
     let tests_with_earnings = backtests_by_symbol
         .into_iter()
-        .map(|(symbol, tests)| {
+        .filter_map(|(symbol, tests)| {
             info!(logger, "Processing symbol {}", symbol);
 
             // Figure out our best guess at the earnings date based on the CML data and a bunch of other sources.
@@ -152,9 +152,15 @@ fn run_it(logger : &slog::Logger) -> Result<(), Error> {
                     datetime: tests[0].next_earnings,
                 };
                 earnings_dates.push(test_date);
-                let new_guess = earnings::best_earnings_guess(&earnings_dates);
-                earnings_cache.insert(symbol.clone(), new_guess.clone());
-                guess = Some(new_guess);
+                guess = earnings::best_earnings_guess(&earnings_dates);
+
+                if guess.is_some() {
+                    earnings_cache.insert(symbol.clone(), guess.as_ref().unwrap().clone());
+                }
+            }
+
+            if guess.is_none() {
+                return None
             }
 
             let guess = guess.unwrap();
@@ -173,7 +179,7 @@ fn run_it(logger : &slog::Logger) -> Result<(), Error> {
                 best_test_index: best_test,
                 earnings: guess.clone(),
             };
-            (key, result)
+            Some((key, result))
         })
         .collect::<BTreeMap<_, _>>();
 
