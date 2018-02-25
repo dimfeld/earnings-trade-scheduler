@@ -9,6 +9,7 @@ The `strategy` column should be one of these values depending on the strategy yo
 * `call_3d_preearnings`
 * `call_7d_preearnings`
 * `call_14d_preearnings`
+* `strangle_4d_preearnings`
 * `strangle_7d_preearnings`
 * `strangle_14d_preearnings`
 * `iron_condor_postearnings`
