@@ -481,7 +481,7 @@ pub fn get_earnings_date_estimates(logger : &slog::Logger, client : &reqwest::Cl
                         let msg = e.causes()
                             .map(|e| e.to_string())
                             .join("\n  ");
-                        error!(logger, "{}", msg);
+                        warn!(logger, "{}", msg);
                         None
                     },
                     Ok(date) => date
