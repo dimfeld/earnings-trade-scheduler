@@ -12,3 +12,4 @@
 .earnings_cache.json
 *.txt
 raw.json
+*.csv
