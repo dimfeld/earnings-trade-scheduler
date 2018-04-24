@@ -3,6 +3,7 @@
 extern crate chrono;
 extern crate crossbeam;
 extern crate csv;
+extern crate htmlescape;
 #[macro_use] extern crate failure;
 extern crate itertools;
 extern crate json;

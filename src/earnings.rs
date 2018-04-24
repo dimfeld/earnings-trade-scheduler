@@ -6,12 +6,13 @@ use itertools::Itertools;
 use slog;
 use reqwest;
 use std::collections::HashMap;
-use failure::{Error, ResultExt};
+use failure::{Error, ResultExt, err_msg};
 use scraper::{Html, Selector};
 use chrono;
 use chrono::{NaiveDate, Datelike, Timelike, Weekday, Duration, DateTime, TimeZone, Utc};
 use regex::Regex;
 use json;
+use htmlescape::decode_html;
 
 #[derive(Debug, Fail)]
 enum EarningsError {
@@ -406,9 +407,10 @@ fn extract_zacks(_logger : &slog::Logger, mut response : reqwest::Response) -> R
         .map_or(Ok(None), |v| v.map(Some)) // Switch Option<Result<T, E>> to Result<Option<T>, Error>
 }
 
-fn extract_estimize(_logger : &slog::Logger, mut response : reqwest::Response) -> Result<Option<EarningsDateTime>, Error> {
+fn extract_estimize(logger : &slog::Logger, mut response : reqwest::Response) -> Result<Option<EarningsDateTime>, Error> {
     lazy_static! {
-        static ref RE: Regex = Regex::new(r#"^\s*presenter:"#).unwrap();
+        static ref MATCH_RE: Regex = Regex::new(r#"data-react-class="releases/app""#).unwrap();
+        static ref EXTRACT_RE: Regex = Regex::new(r#"data-react-props="(.*)">"#).unwrap();
         static ref TODAY : DateTime<Utc> = Utc::now();
     }
 
@@ -416,13 +418,24 @@ fn extract_estimize(_logger : &slog::Logger, mut response : reqwest::Response) -
 
     text.as_str()
         .lines()
-        .find(|line| RE.is_match(line))
-        .ok_or_else(|| Error::from(EarningsError::JsonPayloadNotFound))
+        .find(|line| MATCH_RE.is_match(line))
+        .ok_or_else(|| err_msg("match re did not match"))
         .and_then(|line| {
-            let start = line.chars().position(|c| c == '{').ok_or(EarningsError::JsonPayloadNotFound)?;
-            let value = json::parse(&line[start..line.len()-1])?;
+            EXTRACT_RE.captures_iter(line)
+                .next()
+                .and_then(|c| c.get(1))
+                .ok_or_else(|| err_msg("extract RE did not match"))
+        })
+        .and_then(|mtch| {
+            decode_html(mtch.as_str())
+                .map_err(|e| format_err!("decode failed: {:?}", e))
+        })
+        .and_then(|line| {
 
-            let earnings_date = value["allReleases"]
+            warn!(logger, "{}", line);
+            let value = json::parse(&line)?;
+
+            let earnings_date = value["presenter"]["allReleases"]
                 .members()
                 .map(|val| {
                     let report_time = val["reportsAt"].as_i64().unwrap_or(0) / 1000;
