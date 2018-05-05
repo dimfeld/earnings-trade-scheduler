@@ -30,9 +30,11 @@ USAGE:
     earnings-trade-scheduler [FLAGS] [OPTIONS] <input>
 
 FLAGS:
+        --all        One row per active strategy
+        --best       One row per symbol, and highlight the best-performing strategy
     -h, --help       Prints help information
-        --post       Include only post-earnings strategies
-        --pre        Include only pre-earnings strategies
+        --post       Include only post-earnings strategies (and default to --best if not otherwise specified)
+        --pre        Include only pre-earnings strategies (and default to --all if not otherwise specified)
     -V, --version    Prints version information
 
 OPTIONS:
