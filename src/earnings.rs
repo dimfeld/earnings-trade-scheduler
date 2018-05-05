@@ -409,8 +409,8 @@ fn extract_zacks(_logger : &slog::Logger, mut response : reqwest::Response) -> R
 
 fn extract_estimize(logger : &slog::Logger, mut response : reqwest::Response) -> Result<Option<EarningsDateTime>, Error> {
     lazy_static! {
-        static ref MATCH_RE: Regex = Regex::new(r#"data-react-class="releases/app""#).unwrap();
-        static ref EXTRACT_RE: Regex = Regex::new(r#"data-react-props="(.*)">"#).unwrap();
+        static ref MATCH_RE: Regex = Regex::new(r#"(data-react-class|component_path)="releases/app""#).unwrap();
+        static ref EXTRACT_RE: Regex = Regex::new(r#"data(-react-props)?="(.*)" component_path"#).unwrap();
         static ref TODAY : DateTime<Utc> = Utc::now();
     }
 
@@ -423,7 +423,7 @@ fn extract_estimize(logger : &slog::Logger, mut response : reqwest::Response) ->
         .and_then(|line| {
             EXTRACT_RE.captures_iter(line)
                 .next()
-                .and_then(|c| c.get(1))
+                .and_then(|c| c.get(2))
                 .ok_or_else(|| err_msg("extract RE did not match"))
         })
         .and_then(|mtch| {
@@ -431,8 +431,6 @@ fn extract_estimize(logger : &slog::Logger, mut response : reqwest::Response) ->
                 .map_err(|e| format_err!("decode failed: {:?}", e))
         })
         .and_then(|line| {
-
-            warn!(logger, "{}", line);
             let value = json::parse(&line)?;
 
             let earnings_date = value["presenter"]["allReleases"]
