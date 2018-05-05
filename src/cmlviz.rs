@@ -3,7 +3,7 @@ use earnings::{Date, DatelikeExt, EarningsDateTime, AnnounceTime};
 use chrono::{Datelike, Duration, Weekday};
 use std::str::FromStr;
 
-#[derive(Debug,Deserialize,Serialize,Clone,Copy,PartialEq,Eq,Hash)]
+#[derive(Debug,Deserialize,Serialize,Clone,Copy,PartialEq,Eq,PartialOrd,Ord,Hash)]
 pub enum Strategy {
     #[serde(rename="call_3d_preearnings")]
     Call3DaysBeforeEarnings,

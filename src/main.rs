@@ -66,18 +66,24 @@ struct Config {
     #[structopt(long="strategy", short="s", help="Strategies to include")]
     strategies : Vec<cmlviz::Strategy>,
 
-    #[structopt(long="post", help="Include only post-earnings strategies")]
+    #[structopt(long="post", help="Include only post-earnings strategies (and default to --best if not otherwise specified)")]
     post_earnings : bool,
 
-    #[structopt(long="pre", help="Include only pre-earnings strategies")]
+    #[structopt(long="pre", help="Include only pre-earnings strategies (and default to --all if not otherwise specified)")]
     pre_earnings : bool,
+
+    #[structopt(long="best", help="One row per symbol, and highlight the best-performing strategy")]
+    best : bool,
+
+    #[structopt(long="all", help="One row per active strategy")]
+    all : bool,
 }
 
 #[derive(Debug,Serialize)]
 struct TestsAndEarnings {
     symbol : String,
     tests : Vec<cmlviz::BacktestResult>,
-    best_test_index: usize,
+    active_test_index: usize,
     earnings : earnings::EarningsGuess,
 }
 
@@ -85,13 +91,28 @@ fn run_it(logger : &slog::Logger) -> Result<(), Error> {
     let mut cfg = Config::from_args();
     let filename = &cfg.input;
 
+    let mut best_only = false;
+
+    // the pre and post earnings options set a default value for best_only.
     if cfg.post_earnings {
         cfg.strategies.extend(cmlviz::Strategy::postearnings_strategies().into_iter());
+        best_only = true;
     }
 
     if cfg.pre_earnings {
         cfg.strategies.extend(cmlviz::Strategy::preearnings_strategies().into_iter());
+        best_only = false;
     }
+
+    // If the user explicitly set --best or --all, use that.
+    if cfg.best {
+        best_only = true;
+    } else if cfg.all {
+        best_only = false;
+    }
+
+    // Doesn't really matter, but let's remove mutability.
+    let best_only = best_only;
 
     let mut reader = csv::ReaderBuilder::new()
         .has_headers(true)
@@ -169,19 +190,33 @@ fn run_it(logger : &slog::Logger) -> Result<(), Error> {
             // The "best test" is just the one that has the highest average trade return.
             // In general the win rates for the various strategies are close enough that it's not worth factoring it in
             // beyond the effect that it already has on the average return.
-            let best_test = cmlviz::get_best_test(&tests);
+            let active_tests;
+            if best_only {
+                let best_test = cmlviz::get_best_test(&tests);
+                active_tests = vec![best_test];
+            } else {
+                active_tests = (0..tests.len()).into_iter().collect::<Vec<_>>();
+            }
 
-            let open_date = tests[best_test].strategy.open_date(guess.last_session);
-            let close_date = tests[best_test].strategy.close_date(guess.last_session);
-            let key = (open_date, close_date, symbol.clone());
-            let result = TestsAndEarnings{
-                symbol: symbol,
-                tests: tests,
-                best_test_index: best_test,
-                earnings: guess.clone(),
-            };
-            Some((key, result))
+            let output = active_tests.into_iter()
+                .map(|active_test| {
+                    let open_date = tests[active_test].strategy.open_date(guess.last_session);
+                    let close_date = tests[active_test].strategy.close_date(guess.last_session);
+                    let key = (open_date, close_date, symbol.clone(), tests[active_test].strategy);
+                    let result = TestsAndEarnings{
+                        symbol: symbol.clone(),
+                        tests: tests.clone(),
+                        active_test_index: active_test,
+                        earnings: guess.clone(),
+                    };
+
+                    (key, result)
+                })
+                .collect::<Vec<_>>();
+
+            Some(output)
         })
+        .flat_map(|x| x)
         .collect::<BTreeMap<_, _>>();
 
     std::fs::File::create(EARNINGS_CACHE_NAME)
@@ -203,15 +238,14 @@ fn run_it(logger : &slog::Logger) -> Result<(), Error> {
         .map(|path| File::create(path))
         .map_or(Ok(None), |v| v.map(Some))?;
 
-    for ((open_date, close_date, symbol), data) in tests_with_earnings {
+    for ((open_date, close_date, symbol, strategy), data) in tests_with_earnings {
 
-        let best_test = &data.tests[data.best_test_index];
-        let best_strategy = best_test.strategy;
+        let active_test = &data.tests[data.active_test_index];
         let best_of_other_strategies = data.tests
             .iter()
             .fold(HashMap::new(), |mut acc : HashMap<cmlviz::Strategy, &cmlviz::BacktestResult>, test| {
-                // Don't include the best strategy since we're displaying that separately.
-                if test.strategy != best_strategy {
+                // Don't include the active strategy since we're displaying that separately.
+                if test.strategy != strategy {
                     let x = acc.entry(test.strategy).or_insert(test);
                     if (*x).sort_key() < test.sort_key() {
                         *x = test;
@@ -231,7 +265,7 @@ fn run_it(logger : &slog::Logger) -> Result<(), Error> {
 
         let concurrences = data.earnings.concurrences.iter().map(|x| x.source.as_ref()).join(",");
 
-        let best_strategy_desc = format!("{} {}", best_test.strategy.short_name(), best_test.stats());
+        let best_strategy_desc = format!("{} {}", active_test.strategy.short_name(), active_test.stats());
 
         write!(output, "{open} - {close} : {symbol} {best_strategy} [{other_strategies}] [{sources}]",
             open=open_date,

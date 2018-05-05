@@ -407,7 +407,7 @@ fn extract_zacks(_logger : &slog::Logger, mut response : reqwest::Response) -> R
         .map_or(Ok(None), |v| v.map(Some)) // Switch Option<Result<T, E>> to Result<Option<T>, Error>
 }
 
-fn extract_estimize(logger : &slog::Logger, mut response : reqwest::Response) -> Result<Option<EarningsDateTime>, Error> {
+fn extract_estimize(_logger : &slog::Logger, mut response : reqwest::Response) -> Result<Option<EarningsDateTime>, Error> {
     lazy_static! {
         static ref MATCH_RE: Regex = Regex::new(r#"(data-react-class|component_path)="releases/app""#).unwrap();
         static ref EXTRACT_RE: Regex = Regex::new(r#"data(-react-props)?="(.*)" component_path"#).unwrap();
