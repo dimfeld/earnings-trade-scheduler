@@ -195,7 +195,8 @@ fn run_it(logger : &slog::Logger) -> Result<(), Error> {
                 let best_test = cmlviz::get_best_test(&tests);
                 active_tests = vec![best_test];
             } else {
-                active_tests = (0..tests.len()).into_iter().collect::<Vec<_>>();
+                let best_tests = cmlviz::get_best_test_per_strategy(&tests);
+                active_tests = best_tests.into_iter().map(|(_, v)| v).collect::<Vec<_>>();
             }
 
             let output = active_tests.into_iter()
@@ -241,21 +242,10 @@ fn run_it(logger : &slog::Logger) -> Result<(), Error> {
     for ((open_date, close_date, symbol, strategy), data) in tests_with_earnings {
 
         let active_test = &data.tests[data.active_test_index];
-        let best_of_other_strategies = data.tests
-            .iter()
-            .fold(HashMap::new(), |mut acc : HashMap<cmlviz::Strategy, &cmlviz::BacktestResult>, test| {
-                // Don't include the active strategy since we're displaying that separately.
-                if test.strategy != strategy {
-                    let x = acc.entry(test.strategy).or_insert(test);
-                    if (*x).sort_key() < test.sort_key() {
-                        *x = test;
-                    }
-                }
-                acc
-            });
-
-        let mut best_others_sorted_by_return = best_of_other_strategies
+        let mut best_others_sorted_by_return = cmlviz::get_best_test_per_strategy(&data.tests)
             .into_iter()
+            .filter(|&(other_strategy, _)| other_strategy != strategy)
+            .map(|(strategy, index)| (strategy, &data.tests[index]))
             .collect::<Vec<(cmlviz::Strategy, &cmlviz::BacktestResult)>>();
         best_others_sorted_by_return.sort_by_key(|&(_, x)| -x.sort_key());
         let other_strategies = best_others_sorted_by_return

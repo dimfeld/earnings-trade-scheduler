@@ -2,6 +2,7 @@ use failure::{Error, ResultExt, err_msg};
 use earnings::{Date, DatelikeExt, EarningsDateTime, AnnounceTime};
 use chrono::{Datelike, Duration, Weekday};
 use std::str::FromStr;
+use std::collections::HashMap;
 
 #[derive(Debug,Deserialize,Serialize,Clone,Copy,PartialEq,Eq,PartialOrd,Ord,Hash)]
 pub enum Strategy {
@@ -211,4 +212,19 @@ pub fn get_best_test(tests : &[BacktestResult]) -> usize {
         .max_by_key(|&(_, x)| x.sort_key())
         .map(|x| x.0)
         .unwrap_or(0)
+}
+
+pub fn get_best_test_per_strategy(tests : &[BacktestResult]) -> HashMap<Strategy, usize> {
+    tests.iter()
+        .enumerate()
+        .fold(HashMap::new(), |mut acc, (index, test)| {
+            {
+                let value = acc.entry(test.strategy).or_insert(index);
+                if tests[*value].sort_key() < test.sort_key() {
+                    *value = index;
+                }
+            }
+
+            acc
+        })
 }
