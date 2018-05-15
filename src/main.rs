@@ -257,13 +257,14 @@ fn run_it(logger : &slog::Logger) -> Result<(), Error> {
 
         let best_strategy_desc = format!("{} {}", active_test.strategy.short_name(), active_test.stats());
 
-        write!(output, "{open} - {close} : {symbol} {best_strategy} [{other_strategies}] [{sources}]",
+        write!(output, "{open} - {close} : {symbol} {best_strategy} [{other_strategies}] [{prev_earnings}] [{sources}]",
             open=open_date,
             close=close_date,
             symbol=symbol,
             sources=concurrences,
             best_strategy=best_strategy_desc,
-            other_strategies=other_strategies)?;
+            other_strategies=other_strategies,
+            prev_earnings=active_test.prev_earnings_result)?;
 
         if data.earnings.close_disagreements.len() > 0 || data.earnings.far_disagreements.len() > 0 {
             let disagreements = data.earnings.close_disagreements.iter()

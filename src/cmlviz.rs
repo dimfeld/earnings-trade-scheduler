@@ -142,6 +142,7 @@ pub struct BacktestResultInput {
     pub total_return : String,
     pub backtest_length : usize,
     pub next_earnings : String,
+    pub prev_earnings_result : String,
     pub strategy : Strategy,
 }
 
@@ -155,6 +156,7 @@ pub struct BacktestResult {
     pub total_return : i32,
     pub backtest_length : usize,
     pub next_earnings : EarningsDateTime,
+    pub prev_earnings_result : String,
     pub strategy : Strategy,
 }
 
@@ -201,6 +203,7 @@ impl BacktestResult {
             total_return: total_return,
             backtest_length: input.backtest_length,
             next_earnings: earnings_date,
+            prev_earnings_result: input.prev_earnings_result,
             strategy: input.strategy,
         })
     }

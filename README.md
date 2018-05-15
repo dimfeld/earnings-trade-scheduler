@@ -2,7 +2,7 @@ This utility takes a CSV generated from the CML TradeMachine scanner results and
 
 There isn't an easy way to generate this CSV right now, but if you scan by strategy you can then export the results by setting a breakpoint in `datatables.js` where it has all the results and running some Javascript in the console to print the results.
 
-The CSV should have this format: `symbol,wins,losses,win_rate,avg_trade_return,total_return,backtest_length,next_earnings,strategy`. The last column is the strategy name, which you'll need to fill in yourself, and the other columns are the raw data.
+The CSV should have this format: `symbol,wins,losses,win_rate,avg_trade_return,total_return,backtest_length,next_earnings,prev_earnings_result,strategy`. The last column is the strategy name, which you'll need to fill in yourself, and the other columns are the raw data.
 
 The `strategy` column should be one of these values depending on the strategy you're exporting:
 
