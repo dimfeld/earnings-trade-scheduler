@@ -12,9 +12,10 @@ The `strategy` column should be one of these values depending on the strategy yo
 * `strangle_4d_preearnings`
 * `strangle_7d_preearnings`
 * `strangle_14d_preearnings`
-* `iron_condor_postearnings`
-* `put_spread_postearnings`
-* `long_straddle_postearnings`
+* `iron_condor_post_earnings`
+* `put_spread_post_earnings`
+* `long_straddle_post_earnings`
+* `long_call_post_earnings`
 
 If this sounds like a hassle, well, it is. But this utility saves me hours of work each week that I was spending picking the best strategy to use and verifying the correct earnings date.
 

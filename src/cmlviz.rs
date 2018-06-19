@@ -32,6 +32,9 @@ pub enum Strategy {
 
     #[serde(rename="long_straddle_post_earnings")]
     LongStraddleAfterEarnings,
+
+    #[serde(rename="long_call_post_earnings")]
+    LongCallAfterEarnings,
 }
 
 impl FromStr for Strategy {
@@ -47,6 +50,7 @@ impl FromStr for Strategy {
             "put_spread_post_earnings" => Ok(Strategy::PutSpreadAfterEarnings),
             "iron_condor_post_earnings" => Ok(Strategy::IronCondorAfterEarnings),
             "long_straddle_post_earnings" => Ok(Strategy::LongStraddleAfterEarnings),
+            "long_call_post_earnings" => Ok(Strategy::LongCallAfterEarnings),
             _ => Err(err_msg(format!("Unknown strategy {}", s))),
         }
     }
@@ -58,7 +62,7 @@ impl Strategy {
     }
 
     pub fn postearnings_strategies() -> Vec<Strategy> {
-        vec![Strategy::PutSpreadAfterEarnings, Strategy::IronCondorAfterEarnings, Strategy::LongStraddleAfterEarnings]
+        vec![Strategy::PutSpreadAfterEarnings, Strategy::IronCondorAfterEarnings, Strategy::LongStraddleAfterEarnings, Strategy::LongCallAfterEarnings]
     }
 
     pub fn open_date(&self, last_preearnings_session : Date) -> Date {
@@ -83,7 +87,10 @@ impl Strategy {
             },
             Strategy::Strangle7DaysBeforeEarnings => last_preearnings_session - Duration::days(7),
             Strategy::Strangle14DaysBeforeEarnings => last_preearnings_session - Duration::days(14),
-            Strategy::PutSpreadAfterEarnings | Strategy::IronCondorAfterEarnings | Strategy::LongStraddleAfterEarnings => last_preearnings_session.next_trading_day(),
+            Strategy::PutSpreadAfterEarnings
+            | Strategy::IronCondorAfterEarnings
+            | Strategy::LongStraddleAfterEarnings
+            | Strategy::LongCallAfterEarnings => last_preearnings_session.next_trading_day(),
         }
     }
 
@@ -98,6 +105,7 @@ impl Strategy {
             Strategy::PutSpreadAfterEarnings => last_preearnings_session + Duration::days(22),
             Strategy::IronCondorAfterEarnings => last_preearnings_session + Duration::days(32),
             Strategy::LongStraddleAfterEarnings => last_preearnings_session + Duration::days(8),
+            Strategy::LongCallAfterEarnings => last_preearnings_session + Duration::days(15),
         };
 
         close.closest_trading_day()
@@ -114,6 +122,7 @@ impl Strategy {
             Strategy::IronCondorAfterEarnings => "E+1 Iron Condor",
             Strategy::PutSpreadAfterEarnings => "E+1 Put Spread",
             Strategy::LongStraddleAfterEarnings => "E+1 Long Straddle",
+            Strategy::LongCallAfterEarnings => "E+1 Long Call (price +3%)",
         }
     }
 
@@ -128,6 +137,7 @@ impl Strategy {
             Strategy::IronCondorAfterEarnings => "E+1IC",
             Strategy::PutSpreadAfterEarnings => "E+1P",
             Strategy::LongStraddleAfterEarnings => "E+1LS",
+            Strategy::LongCallAfterEarnings => "E+1LC",
         }
     }
 }
