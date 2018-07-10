@@ -35,6 +35,9 @@ pub enum Strategy {
 
     #[serde(rename="long_call_post_earnings")]
     LongCallAfterEarnings,
+
+    #[serde(rename="long_call_post_earnings")]
+    LongPutAfterEarnings,
 }
 
 impl FromStr for Strategy {
@@ -51,6 +54,7 @@ impl FromStr for Strategy {
             "iron_condor_post_earnings" => Ok(Strategy::IronCondorAfterEarnings),
             "long_straddle_post_earnings" => Ok(Strategy::LongStraddleAfterEarnings),
             "long_call_post_earnings" => Ok(Strategy::LongCallAfterEarnings),
+            "long_put_post_earnings" => Ok(Strategy::LongPutAfterEarnings),
             _ => Err(err_msg(format!("Unknown strategy {}", s))),
         }
     }
@@ -62,7 +66,7 @@ impl Strategy {
     }
 
     pub fn postearnings_strategies() -> Vec<Strategy> {
-        vec![Strategy::PutSpreadAfterEarnings, Strategy::IronCondorAfterEarnings, Strategy::LongStraddleAfterEarnings, Strategy::LongCallAfterEarnings]
+        vec![Strategy::PutSpreadAfterEarnings, Strategy::IronCondorAfterEarnings, Strategy::LongStraddleAfterEarnings, Strategy::LongCallAfterEarnings, Strategy::LongPutAfterEarnings]
     }
 
     pub fn open_date(&self, last_preearnings_session : Date) -> Date {
@@ -90,7 +94,8 @@ impl Strategy {
             Strategy::PutSpreadAfterEarnings
             | Strategy::IronCondorAfterEarnings
             | Strategy::LongStraddleAfterEarnings
-            | Strategy::LongCallAfterEarnings => last_preearnings_session.next_trading_day(),
+            | Strategy::LongCallAfterEarnings
+            | Strategy::LongPutAfterEarnings => last_preearnings_session.next_trading_day(),
         }
     }
 
@@ -106,6 +111,7 @@ impl Strategy {
             Strategy::IronCondorAfterEarnings => last_preearnings_session + Duration::days(32),
             Strategy::LongStraddleAfterEarnings => last_preearnings_session + Duration::days(8),
             Strategy::LongCallAfterEarnings => last_preearnings_session + Duration::days(15),
+            Strategy::LongPutAfterEarnings => last_preearnings_session + Duration::days(15),
         };
 
         close.closest_trading_day()
@@ -123,6 +129,7 @@ impl Strategy {
             Strategy::PutSpreadAfterEarnings => "E+1 Put Spread",
             Strategy::LongStraddleAfterEarnings => "E+1 Long Straddle",
             Strategy::LongCallAfterEarnings => "E+1 Long Call (price +3%)",
+            Strategy::LongPutAfterEarnings => "E+1 Long Put (price -3%)",
         }
     }
 
@@ -138,6 +145,7 @@ impl Strategy {
             Strategy::PutSpreadAfterEarnings => "E+1P",
             Strategy::LongStraddleAfterEarnings => "E+1LS",
             Strategy::LongCallAfterEarnings => "E+1LC",
+            Strategy::LongPutAfterEarnings => "E+1LP",
         }
     }
 }

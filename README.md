@@ -16,6 +16,7 @@ The `strategy` column should be one of these values depending on the strategy yo
 * `put_spread_post_earnings`
 * `long_straddle_post_earnings`
 * `long_call_post_earnings`
+* `long_put_post_earnings`
 
 If this sounds like a hassle, well, it is. But this utility saves me hours of work each week that I was spending picking the best strategy to use and verifying the correct earnings date.
 
