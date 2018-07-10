@@ -36,7 +36,7 @@ pub enum Strategy {
     #[serde(rename="long_call_post_earnings")]
     LongCallAfterEarnings,
 
-    #[serde(rename="long_call_post_earnings")]
+    #[serde(rename="long_put_post_earnings")]
     LongPutAfterEarnings,
 }
 
