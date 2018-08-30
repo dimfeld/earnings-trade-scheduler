@@ -180,7 +180,7 @@ pub struct BacktestResult {
 
 impl BacktestResult {
     #[inline]
-    pub fn sort_key(&self) -> isize { self.avg_trade_return as isize }
+    pub fn sort_key(&self) -> isize { (self.avg_trade_return * (self.wins + self.losses) as i32) as isize }
 
     pub fn stats(&self) -> String {
         format!("({avg_return}%,{wins}/{losses})", avg_return=self.avg_trade_return, wins=self.wins, losses=self.losses)
